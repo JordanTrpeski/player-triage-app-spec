@@ -52,5 +52,5 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-module = ["jsonschema", "jsonschema.*", "referencing", "referencing.*"]
+module = ["jsonschema", "jsonschema.*", "referencing", "referencing.*", "openpyxl", "openpyxl.*"]
 ignore_missing_imports = true

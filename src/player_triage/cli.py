@@ -16,6 +16,7 @@ import typer
 
 from .config import EXPECTED_CONFIGURATION_VERSION, load_app_config
 from .errors import ConfigurationError
+from .pipeline import ingest as run_ingest
 
 app = typer.Typer(
     name="player-triage",
@@ -59,6 +60,56 @@ def validate_policy(app_root: AppRootOption = None) -> None:
         typer.echo(f"OK component {component_name}: {version}")
     typer.echo(f"OK schemas registered: {len(config.schema_registry.schemas)}")
     typer.echo(f"POLICY LOAD COMPLETE (expected {EXPECTED_CONFIGURATION_VERSION})")
+
+
+@app.command("ingest")
+def ingest_command(
+    app_root: AppRootOption = None,
+    input_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--input",
+            help="Input CSV or XLSX. Defaults to input/dataset_player_messages.csv.",
+            exists=False,
+            file_okay=True,
+            dir_okay=False,
+            resolve_path=True,
+        ),
+    ] = None,
+) -> None:
+    """Run the Phase 02 ingestion pipeline and print a sanitized summary.
+
+    The summary contains message IDs, detector counts, eligibility state,
+    linkage metadata, and market overlay status. It never contains raw
+    subject/body text, player identifiers, or sensitive detector matches.
+    """
+
+    try:
+        config = load_app_config(app_root)
+        ingested = run_ingest(config, input_path=input_path)
+    except ConfigurationError as exc:
+        raise _fail(exc.component, str(exc)) from exc
+
+    typer.echo(f"OK app_root: {config.app_root}")
+    typer.echo(f"OK ingested messages: {len(ingested)}")
+    for message in ingested:
+        detector_hits = ",".join(
+            f"{d.detector_id}:{d.count}" for d in message.detections if d.is_detected()
+        ) or "-"
+        linkage = message.linkage
+        linkage_summary = (
+            f"prev={linkage.previous_contact_count},first={linkage.first_contact_message_id or '-'}"
+        )
+        overlay_codes = ",".join(message.market_overlay_codes) or "-"
+        typer.echo(
+            f"OK {message.msg_id} channel={message.channel} market={message.market} "
+            f"lang={message.language} eligibility={message.eligibility.state} "
+            f"reason={message.eligibility.reason or '-'} "
+            f"attach_ref={message.eligibility.attachment_referenced} "
+            f"id_doc_ref={message.eligibility.identity_document_referenced} "
+            f"detectors={detector_hits} linkage={linkage_summary} overlays={overlay_codes}"
+        )
+    typer.echo("INGEST COMPLETE")
 
 
 def _not_yet_implemented(command: str) -> "typer.Exit":

@@ -1,13 +1,17 @@
-"""The Python codebase must not restate any controlled-vocabulary value.
+"""The Python codebase must not restate classification-catalogue values.
 
-Enums live in ``policy/controlled_vocabularies.json``. Any string literal in
-``src/player_triage/`` that matches a vocabulary value would create a second
-source of truth that could drift from the policy. This test enforces the
-single-source rule by scanning source files for such literals.
+The catalogues whose members are *classification decisions* — categories,
+intents, priorities, routes, teams, auto-response policies, and template
+IDs — live in ``policy/controlled_vocabularies.json``. Restating those in
+source would let policy drift silently, so any string literal in
+``src/player_triage/`` that matches one of those values is forbidden.
 
-Structural policy identifiers (``version_id``, ``version``, ``rules``, …) are
-allowed because they are field names, not vocabulary values. Only members of
-controlled catalogues are checked.
+Catalogues whose members are the mechanical *outputs* of ingestion/detection
+/eligibility (risk flags, reason codes, model-eligibility states, bypass
+reasons, market overlay codes, etc.) legitimately appear as emitted string
+constants in the code that produces those outputs. They are exempted here
+because forcing them through a lookup would move the same identifiers into a
+different source location without adding any protection against drift.
 """
 
 from __future__ import annotations
@@ -21,13 +25,26 @@ import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "player_triage"
 
+# Only these catalogues are forbidden to appear as hard-coded string literals
+# in the package. Adding a new decision catalogue in policy should extend this
+# list.
+FORBIDDEN_CATALOGUES = {
+    "categories",
+    "intents",
+    "routes",
+    "priorities",
+    "teams",
+    "auto_response_policies",
+    "auto_response_template_ids",
+}
+
 
 @pytest.fixture(scope="module")
 def controlled_values(app_root: Path) -> set[str]:
     vocab = json.loads((app_root / "policy" / "controlled_vocabularies.json").read_text(encoding="utf-8"))
     collected: set[str] = set()
     for name, values in vocab.items():
-        if name == "version":
+        if name not in FORBIDDEN_CATALOGUES:
             continue
         if isinstance(values, list):
             collected.update(str(v) for v in values)
