@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rationale_templates_schema.json",
+  "title": "RationaleTemplates",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "templates"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "templates": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "ACCOUNT_ACCESS_ROUTINE",
+          "ACCOUNT_REOPEN_REASON_UNKNOWN",
+          "ACCOUNT_STATEMENT_REQUEST",
+          "ACCOUNT_TAKEOVER_ACTIVE",
+          "ATTACHMENT_RECEIVED_EXCLUDED",
+          "BALANCE_RECONCILIATION",
+          "CASHBACK_CALCULATION_REVIEW",
+          "COMPLIMENT_ACKNOWLEDGMENT",
+          "CONFIGURATION_CHANGED",
+          "CONFIGURATION_ROLLED_BACK",
+          "DUPLICATE_CHARGE_REVIEW",
+          "EVIDENCE_REFERENCED",
+          "EXTERNAL_BODY_MENTIONED",
+          "FAILED_DEPOSIT_AUTH_HOLD",
+          "FORMAL_COMPLAINT",
+          "GAME_INTERRUPTION_REVIEW",
+          "GAME_RESULT_DISPUTE",
+          "GENERAL_TAX_DISCLAIMER",
+          "IDENTITY_DOCUMENT_REFERENCED",
+          "INDIA_MARKET_OVERLAY",
+          "KYC_DOCUMENT_UPLOAD_FAILURE",
+          "KYC_PENDING_WITH_FUNDS",
+          "KYC_UPLOAD_TECHNICAL_REVIEW",
+          "LIMIT_RELAXATION_REQUEST",
+          "LOYALTY_TERMS_INFORMATION",
+          "MARKETING_OPTOUT_ONLY",
+          "MISSING_DEPOSIT_REVIEW",
+          "MODEL_BYPASSED_UNTRUSTED_INPUT",
+          "MODEL_SCHEMA_INVALID",
+          "MODEL_UNAVAILABLE",
+          "PAYMENT_STATUS_FIRST_CONTACT",
+          "PCI_SENSITIVE_AUTH_DATA",
+          "PROMO_CREDIT_MISSING",
+          "PROMO_ELIGIBILITY_REVIEW",
+          "PROMPT_INJECTION_DETECTED",
+          "PROOF_OF_ADDRESS_INFORMATION",
+          "REDACTION_UNCERTAIN",
+          "REGISTERED_MOBILE_CHANGE",
+          "REPEAT_CONTACT",
+          "REPEAT_CONTACT_ESCALATION",
+          "RG_ACTIVE_COOL_OFF_REMOVAL",
+          "RG_EXPLICIT_SELF_EXCLUSION",
+          "RG_LIMIT_RELAXATION",
+          "RG_LOSS_OF_CONTROL_CLOSURE",
+          "RG_REOPEN_REVIEW",
+          "ROUTINE_USERNAME_RECOVERY",
+          "SELF_HARM_ESCALATION",
+          "STATIC_ACCOUNT_RECOVERY_FAQ",
+          "STATIC_BONUS_TERMS",
+          "STATIC_BONUS_TERMS_FAQ",
+          "STATIC_KYC_DOCUMENT_FAQ",
+          "STATIC_LOYALTY_FAQ",
+          "STATIC_WITHDRAWAL_TIMING_FAQ",
+          "TECHNICAL_APP_FAILURE",
+          "THIRD_PARTY_PAYMENT_REPORTED",
+          "UNCLASSIFIED_MANUAL_REVIEW",
+          "UNDERAGE_GAMBLING_REPORTED",
+          "VIP_CONTACT_UNANSWERED",
+          "VIP_PROMO_SUPPORT",
+          "WAGERING_INFORMATION",
+          "WITHDRAWAL_BLOCKED",
+          "WITHDRAWAL_DELAY",
+          "WITHDRAWAL_REPEAT_CONTACT",
+          "WITHDRAWAL_TIMING_INFORMATION"
+        ]
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      }
+    }
+  }
+}

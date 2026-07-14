@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation_summary_schema.json",
+  "title": "EvaluationSummary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "configuration_version",
+    "message_count",
+    "terminal_count",
+    "schema_valid_count",
+    "hard_gates_passed",
+    "hard_gate_failures",
+    "metrics",
+    "mismatches"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "configuration_version": {
+      "type": "string"
+    },
+    "message_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "terminal_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "schema_valid_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "hard_gates_passed": {
+      "type": "boolean"
+    },
+    "hard_gate_failures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "integer",
+          "null"
+        ]
+      }
+    },
+    "mismatches": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "latency_ms": {
+      "type": "object"
+    },
+    "bypass_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "manual_review_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

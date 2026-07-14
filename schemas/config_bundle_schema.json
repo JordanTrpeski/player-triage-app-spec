@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "config_bundle_schema.json",
+  "title": "PolicyConfigurationBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version_id",
+    "parent_version_id",
+    "status",
+    "created_at",
+    "created_by",
+    "change_reason",
+    "components"
+  ],
+  "properties": {
+    "version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_version_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "validated",
+        "active",
+        "superseded",
+        "rejected"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_reason": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 500
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_rules",
+        "baseline_intent_rules",
+        "redaction_policy",
+        "market_overlays",
+        "auto_response_templates",
+        "rationale_templates",
+        "semantic_constraints"
+      ],
+      "properties": {
+        "policy_rules": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "baseline_intent_rules": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "redaction_policy": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "market_overlays": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "auto_response_templates": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rationale_templates": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "semantic_constraints": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "validation_summary": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "impact_summary": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "activation_event_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

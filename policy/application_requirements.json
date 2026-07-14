@@ -1,0 +1,141 @@
+{
+  "version": "3.0",
+  "requirements": [
+    {
+      "id": "APP-001",
+      "area": "Input",
+      "requirement": "Load and validate canonical CSV/XLSX",
+      "implemented_by": "input adapter",
+      "verified_by": "test_input_equivalence",
+      "mandatory": true
+    },
+    {
+      "id": "APP-002",
+      "area": "Classification",
+      "requirement": "One of eight categories and four priorities",
+      "implemented_by": "output schema + policy engine",
+      "verified_by": "ground truth integration",
+      "mandatory": true
+    },
+    {
+      "id": "APP-003",
+      "area": "Routing",
+      "requirement": "Route and named team",
+      "implemented_by": "output schema + policy engine",
+      "verified_by": "ground truth integration",
+      "mandatory": true
+    },
+    {
+      "id": "APP-004",
+      "area": "Privacy",
+      "requirement": "Local sensitive detection/redaction before model",
+      "implemented_by": "redaction service",
+      "verified_by": "behaviour fixtures",
+      "mandatory": true
+    },
+    {
+      "id": "APP-005",
+      "area": "Safety",
+      "requirement": "Deterministic high-risk precedence",
+      "implemented_by": "pre-model rules",
+      "verified_by": "safety assertions",
+      "mandatory": true
+    },
+    {
+      "id": "APP-006",
+      "area": "Model",
+      "requirement": "Optional local model with no authority",
+      "implemented_by": "provider interface + model schema",
+      "verified_by": "adapter contract tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-007",
+      "area": "Attachments",
+      "requirement": "No raw attachment in model path",
+      "implemented_by": "attachment gate",
+      "verified_by": "synthetic A01",
+      "mandatory": true
+    },
+    {
+      "id": "APP-008",
+      "area": "Audit",
+      "requirement": "CSV and append-only JSONL",
+      "implemented_by": "export + audit writer",
+      "verified_by": "schema/export tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-009",
+      "area": "Human control",
+      "requirement": "Append-only overrides",
+      "implemented_by": "review service + UI",
+      "verified_by": "override event test",
+      "mandatory": true
+    },
+    {
+      "id": "APP-010",
+      "area": "Changes",
+      "requirement": "Draft/validate/impact/activate/rollback",
+      "implemented_by": "configuration manager + UI",
+      "verified_by": "change lifecycle tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-011",
+      "area": "Evaluation",
+      "requirement": "40-case metrics and hard gates",
+      "implemented_by": "evaluation service",
+      "verified_by": "evaluation schema",
+      "mandatory": true
+    },
+    {
+      "id": "APP-012",
+      "area": "Reliability",
+      "requirement": "Fail closed and kill switch",
+      "implemented_by": "pipeline controller",
+      "verified_by": "failure-injection tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-013",
+      "area": "UI",
+      "requirement": "Dashboard/messages/review/policy/evaluation/audit/version/settings",
+      "implemented_by": "Streamlit UI",
+      "verified_by": "UI smoke tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-014",
+      "area": "Market",
+      "requirement": "Consistent market overlays",
+      "implemented_by": "market overlay service",
+      "verified_by": "market tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-015",
+      "area": "Linkage",
+      "requirement": "Repeat-contact linkage without output player ID",
+      "implemented_by": "linkage service",
+      "verified_by": "M09/M31 test",
+      "mandatory": true
+    },
+    {
+      "id": "APP-016",
+      "area": "Templates",
+      "requirement": "Approved static template selection only",
+      "implemented_by": "template service",
+      "verified_by": "route/template semantic tests",
+      "mandatory": true
+    },
+    {
+      "id": "APP-017",
+      "area": "No actions",
+      "requirement": "No account/payment/self-exclusion execution",
+      "implemented_by": "architecture boundary",
+      "verified_by": "negative capability tests",
+      "mandatory": true
+    }
+  ]
+}

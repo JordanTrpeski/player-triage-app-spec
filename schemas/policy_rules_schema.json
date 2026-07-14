@@ -1,0 +1,654 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "policy_rules_schema.json",
+  "title": "PolicyRules",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "rule_dsl_version",
+    "rules",
+    "behaviour_fixtures"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "rule_dsl_version": {
+      "type": "string"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "order",
+          "phase",
+          "terminal",
+          "editability",
+          "ui_group",
+          "enabled",
+          "match",
+          "effects",
+          "policy_basis_ids",
+          "control_classification"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_]+$"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "pre_model",
+              "post_semantic"
+            ]
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "editability": {
+            "type": "string",
+            "enum": [
+              "locked",
+              "guarded",
+              "editable"
+            ]
+          },
+          "ui_group": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "match": {
+            "$dynamicAnchor": "condition",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "any"
+                ],
+                "properties": {
+                  "any": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$dynamicRef": "#condition"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "all"
+                ],
+                "properties": {
+                  "all": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$dynamicRef": "#condition"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "flag",
+                  "equals"
+                ],
+                "properties": {
+                  "flag": {
+                    "type": "string"
+                  },
+                  "equals": {}
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "field"
+                ],
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "enum": [
+                      "combined_text"
+                    ]
+                  },
+                  "regex_any": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "regex_none": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "regex_any"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "regex_none"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "set",
+              "add"
+            ],
+            "properties": {
+              "set": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "Payments & Withdrawals",
+                      "KYC & Verification",
+                      "Bonuses & Promotions",
+                      "Technical & Game Issues",
+                      "Responsible Gambling",
+                      "Fraud & Compliance",
+                      "Complaints & Regulatory",
+                      "General"
+                    ]
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "account_closure",
+                      "account_reopen_review",
+                      "account_transaction_statement_request",
+                      "account_takeover_report",
+                      "advertised_bonus_eligibility_dispute",
+                      "bonus_completed",
+                      "bonus_max_bet_terms",
+                      "bonus_status",
+                      "cashback_amount_dispute",
+                      "cashback_calculation_query",
+                      "claimed_missing_win",
+                      "compliment_no_action",
+                      "credible_self_harm",
+                      "deposit_limit_increase",
+                      "duplicate_card_charge",
+                      "explicit_permanent_self_exclusion",
+                      "failed_deposit_authorization_hold",
+                      "forgot_username_routine_recovery",
+                      "formal_withdrawal_complaint",
+                      "game_interruption_round_status",
+                      "game_result_dispute",
+                      "harm_linked_account_closure",
+                      "identity_document_upload_failure",
+                      "login_password_reset_failure",
+                      "loyalty_points_expiry",
+                      "marketing_opt_out",
+                      "missing_deposit",
+                      "missing_free_spins",
+                      "mobile_app_crash",
+                      "proof_of_address_requirements",
+                      "refund_request",
+                      "registered_mobile_change_request",
+                      "remove_active_cool_off",
+                      "repeated_withdrawal_complaint_escalation",
+                      "small_balance_discrepancy",
+                      "tax_information_request",
+                      "third_party_payment",
+                      "underage_gambling_report",
+                      "verification_pending",
+                      "vip_bonus_contact_unanswered",
+                      "wagering_requirement_information",
+                      "withdrawal_blocked",
+                      "withdrawal_delay",
+                      "withdrawal_repeated_unresolved",
+                      "withdrawal_status_first_contact",
+                      "withdrawal_timing_after_bonus",
+                      "unclassified_manual_review"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ]
+                  },
+                  "minimum_priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ]
+                  },
+                  "route": {
+                    "type": "string",
+                    "enum": [
+                      "auto_respond",
+                      "human",
+                      "specialist"
+                    ]
+                  },
+                  "assigned_team": {
+                    "type": "string",
+                    "enum": [
+                      "General Support",
+                      "Payments Operations",
+                      "Payments Security",
+                      "KYC Operations",
+                      "Promotions",
+                      "Technical Support",
+                      "Game Integrity",
+                      "Responsible Gambling",
+                      "Fraud & Account Security",
+                      "Complaints",
+                      "CRM & Privacy",
+                      "Market Compliance",
+                      "Platform Security"
+                    ]
+                  },
+                  "model_eligibility": {
+                    "type": "string",
+                    "enum": [
+                      "eligible",
+                      "eligible_text_only",
+                      "bypass_deterministic",
+                      "bypass_sensitive",
+                      "bypass_attachment",
+                      "bypass_untrusted_input"
+                    ]
+                  },
+                  "model_bypass_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "account_reopen_reason_unknown",
+                      "active_compromise",
+                      "active_control_relaxation",
+                      "active_protective_control",
+                      "attachment_received_body_insufficient",
+                      "explicit_loss_of_control",
+                      "explicit_marketing_only_request",
+                      "explicit_self_exclusion",
+                      "explicit_underage_and_unauthorized_use",
+                      "limit_relaxation_request",
+                      "pan_and_cvv_detected",
+                      "prompt_injection_detected",
+                      "redaction_uncertain",
+                      "self_harm_signal",
+                      "sensitive_payment_or_authentication_data",
+                      "underage_reported",
+                      null
+                    ]
+                  },
+                  "auto_response_policy": {
+                    "type": "string",
+                    "enum": [
+                      "allowed_template",
+                      "acknowledgment_only",
+                      "prohibited",
+                      "requires_approval"
+                    ]
+                  },
+                  "auto_response_template_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "ACK_COMPLIMENT",
+                      "ACK_MARKETING_OPTOUT",
+                      "FAQ_BONUS_MAX_BET",
+                      "FAQ_BONUS_WAGERING_REQUIREMENT",
+                      "FAQ_LOYALTY_POINTS_EXPIRY",
+                      "FAQ_PROOF_OF_ADDRESS",
+                      "FAQ_USERNAME_RECOVERY",
+                      "FAQ_WITHDRAWAL_METHOD_TIMING",
+                      null
+                    ]
+                  },
+                  "human_review_required": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "add": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "risk_flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "account_access_issue",
+                        "account_remains_active",
+                        "account_specific",
+                        "active_account_takeover",
+                        "advertising_claim",
+                        "app_crash",
+                        "attachment_received",
+                        "attachment_referenced",
+                        "balance_discrepancy",
+                        "bank_authorization_hold",
+                        "birthday_bonus",
+                        "bonus_context",
+                        "cashback_discrepancy",
+                        "claimed_win",
+                        "classification_uncertain",
+                        "closure_requested",
+                        "compliment",
+                        "cool_off_active",
+                        "cvv_exposed",
+                        "deposit_declined",
+                        "deposit_limit_increase",
+                        "device_context",
+                        "dissatisfaction",
+                        "duplicate_charge",
+                        "early_removal_requested",
+                        "external_escalation_implied",
+                        "formal_complaint",
+                        "full_pan_exposed",
+                        "game_disconnection",
+                        "game_frozen",
+                        "general_payment_timing",
+                        "german_language",
+                        "harm_linked_closure",
+                        "identity_change",
+                        "identity_data_sensitive",
+                        "identity_document_submitted",
+                        "large_amount",
+                        "large_file",
+                        "loss_of_control",
+                        "low_amount",
+                        "market_eligibility",
+                        "marketing_opt_out",
+                        "model_unavailable",
+                        "multilingual",
+                        "near_duplicate",
+                        "no_account_action",
+                        "no_action_requested",
+                        "no_compromise_alleged",
+                        "no_harm_signal",
+                        "no_response",
+                        "otp_unavailable",
+                        "passport_referenced",
+                        "payment_dispute",
+                        "payment_reconciliation",
+                        "permanent",
+                        "personal_data_export",
+                        "player_deadline",
+                        "possible_self_exclusion",
+                        "prior_closure_reason_unknown",
+                        "prior_ticket",
+                        "promotion_not_credited",
+                        "prompt_injection_detected",
+                        "provider_investigation_requested",
+                        "redaction_uncertain",
+                        "refund_requested",
+                        "registered_channel_loss",
+                        "registered_email_available",
+                        "regulator_mentioned",
+                        "reopen_requested",
+                        "repeat_contact",
+                        "repeated_withdrawal_reversal",
+                        "round_outcome_unknown",
+                        "routine_account_recovery",
+                        "schema_failure",
+                        "self_exclusion_explicit",
+                        "self_harm_signal",
+                        "sensitive_authentication_data",
+                        "static_bonus_terms_question",
+                        "static_document_requirements",
+                        "static_loyalty_terms_question",
+                        "tax_question",
+                        "third_party_payment",
+                        "transaction_history_request",
+                        "unauthorized_card_use",
+                        "underage_reported",
+                        "unsupported_language",
+                        "upload_error",
+                        "vip_contact_unavailable",
+                        "withdrawal_blocked",
+                        "withdrawal_pending"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "reason_codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ACCOUNT_ACCESS_ROUTINE",
+                        "ACCOUNT_REOPEN_REASON_UNKNOWN",
+                        "ACCOUNT_STATEMENT_REQUEST",
+                        "ACCOUNT_TAKEOVER_ACTIVE",
+                        "ATTACHMENT_RECEIVED_EXCLUDED",
+                        "BALANCE_RECONCILIATION",
+                        "CASHBACK_CALCULATION_REVIEW",
+                        "COMPLIMENT_ACKNOWLEDGMENT",
+                        "CONFIGURATION_CHANGED",
+                        "CONFIGURATION_ROLLED_BACK",
+                        "DUPLICATE_CHARGE_REVIEW",
+                        "EVIDENCE_REFERENCED",
+                        "EXTERNAL_BODY_MENTIONED",
+                        "FAILED_DEPOSIT_AUTH_HOLD",
+                        "FORMAL_COMPLAINT",
+                        "GAME_INTERRUPTION_REVIEW",
+                        "GAME_RESULT_DISPUTE",
+                        "GENERAL_TAX_DISCLAIMER",
+                        "IDENTITY_DOCUMENT_REFERENCED",
+                        "INDIA_MARKET_OVERLAY",
+                        "KYC_DOCUMENT_UPLOAD_FAILURE",
+                        "KYC_PENDING_WITH_FUNDS",
+                        "KYC_UPLOAD_TECHNICAL_REVIEW",
+                        "LIMIT_RELAXATION_REQUEST",
+                        "LOYALTY_TERMS_INFORMATION",
+                        "MARKETING_OPTOUT_ONLY",
+                        "MISSING_DEPOSIT_REVIEW",
+                        "MODEL_BYPASSED_UNTRUSTED_INPUT",
+                        "MODEL_SCHEMA_INVALID",
+                        "MODEL_UNAVAILABLE",
+                        "PAYMENT_STATUS_FIRST_CONTACT",
+                        "PCI_SENSITIVE_AUTH_DATA",
+                        "PROMO_CREDIT_MISSING",
+                        "PROMO_ELIGIBILITY_REVIEW",
+                        "PROMPT_INJECTION_DETECTED",
+                        "PROOF_OF_ADDRESS_INFORMATION",
+                        "REDACTION_UNCERTAIN",
+                        "REGISTERED_MOBILE_CHANGE",
+                        "REPEAT_CONTACT",
+                        "REPEAT_CONTACT_ESCALATION",
+                        "RG_ACTIVE_COOL_OFF_REMOVAL",
+                        "RG_EXPLICIT_SELF_EXCLUSION",
+                        "RG_LIMIT_RELAXATION",
+                        "RG_LOSS_OF_CONTROL_CLOSURE",
+                        "RG_REOPEN_REVIEW",
+                        "ROUTINE_USERNAME_RECOVERY",
+                        "SELF_HARM_ESCALATION",
+                        "STATIC_ACCOUNT_RECOVERY_FAQ",
+                        "STATIC_BONUS_TERMS",
+                        "STATIC_BONUS_TERMS_FAQ",
+                        "STATIC_KYC_DOCUMENT_FAQ",
+                        "STATIC_LOYALTY_FAQ",
+                        "STATIC_WITHDRAWAL_TIMING_FAQ",
+                        "TECHNICAL_APP_FAILURE",
+                        "THIRD_PARTY_PAYMENT_REPORTED",
+                        "UNCLASSIFIED_MANUAL_REVIEW",
+                        "UNDERAGE_GAMBLING_REPORTED",
+                        "VIP_CONTACT_UNANSWERED",
+                        "VIP_PROMO_SUPPORT",
+                        "WAGERING_INFORMATION",
+                        "WITHDRAWAL_BLOCKED",
+                        "WITHDRAWAL_DELAY",
+                        "WITHDRAWAL_REPEAT_CONTACT",
+                        "WITHDRAWAL_TIMING_INFORMATION"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "secondary_teams": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "General Support",
+                        "Payments Operations",
+                        "Payments Security",
+                        "KYC Operations",
+                        "Promotions",
+                        "Technical Support",
+                        "Game Integrity",
+                        "Responsible Gambling",
+                        "Fraud & Account Security",
+                        "Complaints",
+                        "CRM & Privacy",
+                        "Market Compliance",
+                        "Platform Security"
+                      ]
+                    },
+                    "uniqueItems": true
+                  },
+                  "secondary_intents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "account_closure",
+                        "account_reopen_review",
+                        "account_transaction_statement_request",
+                        "account_takeover_report",
+                        "advertised_bonus_eligibility_dispute",
+                        "bonus_completed",
+                        "bonus_max_bet_terms",
+                        "bonus_status",
+                        "cashback_amount_dispute",
+                        "cashback_calculation_query",
+                        "claimed_missing_win",
+                        "compliment_no_action",
+                        "credible_self_harm",
+                        "deposit_limit_increase",
+                        "duplicate_card_charge",
+                        "explicit_permanent_self_exclusion",
+                        "failed_deposit_authorization_hold",
+                        "forgot_username_routine_recovery",
+                        "formal_withdrawal_complaint",
+                        "game_interruption_round_status",
+                        "game_result_dispute",
+                        "harm_linked_account_closure",
+                        "identity_document_upload_failure",
+                        "login_password_reset_failure",
+                        "loyalty_points_expiry",
+                        "marketing_opt_out",
+                        "missing_deposit",
+                        "missing_free_spins",
+                        "mobile_app_crash",
+                        "proof_of_address_requirements",
+                        "refund_request",
+                        "registered_mobile_change_request",
+                        "remove_active_cool_off",
+                        "repeated_withdrawal_complaint_escalation",
+                        "small_balance_discrepancy",
+                        "tax_information_request",
+                        "third_party_payment",
+                        "underage_gambling_report",
+                        "verification_pending",
+                        "vip_bonus_contact_unanswered",
+                        "wagering_requirement_information",
+                        "withdrawal_blocked",
+                        "withdrawal_delay",
+                        "withdrawal_repeated_unresolved",
+                        "withdrawal_status_first_contact",
+                        "withdrawal_timing_after_bonus",
+                        "unclassified_manual_review"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                }
+              }
+            }
+          },
+          "policy_basis_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "control_classification": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "behaviour_fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "message_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "pattern": "^M\\d{2}$"
+          },
+          "must_match": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "must_not_match": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

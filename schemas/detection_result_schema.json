@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "detection_result_schema.json",
+  "title": "DetectionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "redaction_status",
+    "redacted_text",
+    "detected_types",
+    "detection_counts",
+    "prompt_injection_detected",
+    "model_eligibility",
+    "model_bypass_reason",
+    "attachment_received",
+    "attachment_referenced",
+    "identity_document_referenced"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "pattern": "^M\\d{2}$"
+    },
+    "redaction_status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "blocked",
+        "uncertain",
+        "error"
+      ]
+    },
+    "redacted_text": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 20000
+    },
+    "detected_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "authentication_secret",
+          "cvv",
+          "payment_card_number",
+          "email",
+          "phone",
+          "player_id",
+          "transaction_reference",
+          "currency_amount",
+          "identity_document_number"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "detection_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "prompt_injection_detected": {
+      "type": "boolean"
+    },
+    "model_eligibility": {
+      "type": "string",
+      "enum": [
+        "eligible",
+        "eligible_text_only",
+        "bypass_deterministic",
+        "bypass_sensitive",
+        "bypass_attachment",
+        "bypass_untrusted_input"
+      ]
+    },
+    "model_bypass_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "account_reopen_reason_unknown",
+        "active_compromise",
+        "active_control_relaxation",
+        "attachment_received_body_insufficient",
+        "explicit_loss_of_control",
+        "explicit_marketing_only_request",
+        "explicit_self_exclusion",
+        "limit_relaxation_request",
+        "pan_and_cvv_detected",
+        "prompt_injection_detected",
+        "redaction_uncertain",
+        "self_harm_signal",
+        "sensitive_payment_or_authentication_data",
+        "underage_reported",
+        null
+      ]
+    },
+    "attachment_received": {
+      "type": "boolean"
+    },
+    "attachment_referenced": {
+      "type": "boolean"
+    },
+    "identity_document_referenced": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "version": "3.0",
+  "teams": [
+    {
+      "name": "General Support",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Payments Operations",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Payments Security",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "KYC Operations",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Promotions",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Technical Support",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Game Integrity",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Responsible Gambling",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Fraud & Account Security",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Complaints",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "CRM & Privacy",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Market Compliance",
+      "type": "owning_or_secondary_team"
+    },
+    {
+      "name": "Platform Security",
+      "type": "owning_or_secondary_team"
+    }
+  ],
+  "rule": "Every final result has one assigned_team. secondary_teams are coordination only and do not replace the owner."
+}

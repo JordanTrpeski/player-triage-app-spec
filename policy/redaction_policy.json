@@ -1,0 +1,212 @@
+{
+  "version": "3.0",
+  "processing_order": [
+    "authentication_secrets",
+    "cvv",
+    "payment_card",
+    "identity_document_number",
+    "contact_and_internal_ids",
+    "transaction_references",
+    "currency_amounts",
+    "prompt_injection_detection"
+  ],
+  "detectors": [
+    {
+      "id": "AUTH_SECRET",
+      "type": "regex_context",
+      "patterns": [
+        "(?i)\\b(?:otp|one[- ]time code|mfa code|pin)\\b\\s*(?:is|=|:|#|-)?\\s*(\\d{4,8})\\b",
+        "(?i)\\b(?:password|passcode|recovery code|session token|bearer token)\\b\\s*(?:is|=|:|#|-)\\s*([A-Za-z0-9_-]{4,})\\b"
+      ],
+      "negative_context_patterns": [],
+      "replacement": "[AUTH_SECRET_PURGED]",
+      "model_action": "bypass_sensitive",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "CVV",
+      "type": "regex_context",
+      "patterns": [
+        "(?i)\\b(?:cvv|cvc|cid|security code)\\s*[:#=-]?\\s*\\d{3,4}\\b"
+      ],
+      "replacement": "[CVV_PURGED]",
+      "model_action": "bypass_sensitive",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "PAN",
+      "type": "pan_candidate_luhn",
+      "candidate_pattern": "(?<!\\d)(?:\\d[ -]?){13,19}(?!\\d)",
+      "replacement": "[PAYMENT_CARD_REMOVED]",
+      "model_action": "bypass_sensitive_if_valid_or_card_context",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "EMAIL",
+      "type": "regex",
+      "patterns": [
+        "(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"
+      ],
+      "replacement": "[EMAIL]",
+      "model_action": "redact",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "PHONE",
+      "type": "regex_context",
+      "patterns": [
+        "(?<!\\w)(?:\\+?\\d[\\d ()-]{7,}\\d)(?!\\w)"
+      ],
+      "negative_context_patterns": [
+        "(?i)\\b(?:ticket|withdrawal|transaction|reference|version|amount|balance|deposit|bonus|multiplier|points?)\\b.{0,12}$"
+      ],
+      "replacement": "[PHONE]",
+      "model_action": "redact_with_false_positive_guard",
+      "audit": "type_and_count_only",
+      "digit_count_min": 8,
+      "digit_count_max": 15
+    },
+    {
+      "id": "PLAYER_ID",
+      "type": "regex",
+      "patterns": [
+        "\\bP-\\d{5}\\b"
+      ],
+      "replacement": "[PLAYER_REF]",
+      "model_action": "redact",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "TRANSACTION_REF",
+      "type": "regex",
+      "patterns": [
+        "\\b(?:W|T)-\\d{5}\\b"
+      ],
+      "replacement": "[TRANSACTION_REF]",
+      "model_action": "redact",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "CURRENCY_AMOUNT",
+      "type": "regex_context",
+      "patterns": [
+        "(?i)(?:[$\u20ac\u00a3]|\\b(?:CAD|EUR|INR|NZD|rupees?)\\b)\\s*\\d[\\d,]*(?:\\.\\d{1,2})?|\\d[\\d,]*(?:\\.\\d{1,2})?\\s*(?:CAD|EUR|INR|NZD|rupees?)\\b"
+      ],
+      "replacement": "[AMOUNT]",
+      "model_action": "redact",
+      "audit": "type_and_count_only"
+    },
+    {
+      "id": "IDENTITY_DOC_NUMBER",
+      "type": "regex_context",
+      "patterns": [
+        "(?i)\\b(?:passport|national id|driving licen[cs]e)\\s*(?:number|no\\.?|#)\\s*[:#=-]?\\s*[A-Z0-9-]{6,20}\\b",
+        "(?i)\\baadhaar\\s*(?:number|no\\.?|#)\\s*[:#=-]?\\s*(?:\\d[ -]?){12}\\b"
+      ],
+      "replacement": "[IDENTITY_DOCUMENT_DETAILS_REMOVED]",
+      "model_action": "redact_or_bypass_if_image_received",
+      "audit": "type_and_count_only"
+    }
+  ],
+  "attachment_policy": {
+    "raw_attachment_processing": "prohibited",
+    "attachment_received_default_action": "exclude_content",
+    "body_sufficient_action": "classify_text_only",
+    "body_insufficient_action": "bypass_attachment"
+  },
+  "fail_closed_when": [
+    "detector_error",
+    "unsupported_encoding",
+    "uncertain_sensitive_authentication_match",
+    "redaction_output_contains_known_secret",
+    "attachment_received_and_body_insufficient"
+  ],
+  "prompt_injection_patterns": [
+    "(?i)\\bsystem note\\b",
+    "(?i)\\bignore (?:all |any )?(?:previous|prior) instructions\\b",
+    "(?i)\\bclassify (?:this|the ticket) as\\b",
+    "(?i)\\bpriority (?:low|medium|high|critical)\\b",
+    "(?i)\\bdo not escalate\\b",
+    "(?i)\\breveal (?:the )?(?:system prompt|instructions)\\b",
+    "(?i)\\byou are (?:chatgpt|the classifier|an ai)\\b",
+    "(?i)\\bdeveloper message\\b"
+  ],
+  "prompt_injection_action": "bypass_untrusted_input",
+  "sanitization_rule": "The prototype does not attempt general-purpose removal of adversarial instructions. If an injection pattern is detected, the model is bypassed; deterministic/rules-only classification is attempted and otherwise manual fallback is used.",
+  "behaviour_fixtures": [
+    {
+      "id": "R01",
+      "message_id": "M11",
+      "expected_detected": [
+        "PAN",
+        "CVV"
+      ],
+      "expected_not_detected": [
+        "AUTH_SECRET",
+        "IDENTITY_DOC_NUMBER"
+      ]
+    },
+    {
+      "id": "R02",
+      "message_id": "M10",
+      "expected_detected": [],
+      "expected_not_detected": [
+        "AUTH_SECRET",
+        "IDENTITY_DOC_NUMBER"
+      ]
+    },
+    {
+      "id": "R03",
+      "message_id": "M03",
+      "expected_detected": [],
+      "expected_not_detected": [
+        "IDENTITY_DOC_NUMBER"
+      ]
+    },
+    {
+      "id": "R04",
+      "message_id": "M18",
+      "expected_detected": [
+        "TRANSACTION_REF"
+      ],
+      "expected_prompt_injection": true
+    },
+    {
+      "id": "R05",
+      "message_id": "M38",
+      "expected_detected": [],
+      "expected_not_detected": [
+        "IDENTITY_DOC_NUMBER"
+      ]
+    },
+    {
+      "id": "R06",
+      "message_id": "M04",
+      "expected_detected": [],
+      "expected_not_detected": [
+        "AUTH_SECRET"
+      ]
+    },
+    {
+      "id": "R07",
+      "message_id": "M01",
+      "expected_not_detected": [
+        "AUTH_SECRET",
+        "PAN",
+        "CVV"
+      ]
+    },
+    {
+      "id": "R08",
+      "message_id": "M11",
+      "expected_not_detected": [
+        "PHONE"
+      ]
+    }
+  ],
+  "prototype_limitations": [
+    "Deterministic detectors are conservative and do not constitute complete DLP.",
+    "Amounts are minimized for model input but retained only in the authorized source file.",
+    "Raw attachments are not opened or OCRed."
+  ]
+}

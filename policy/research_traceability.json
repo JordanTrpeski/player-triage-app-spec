@@ -1,0 +1,138 @@
+{
+  "version": "3.0",
+  "sources": [
+    {
+      "id": "STEP3",
+      "topic": "Authoritative jurisdiction source map",
+      "source_reference": "source-map research retained in project transcript"
+    },
+    {
+      "id": "STEP4",
+      "topic": "Responsible gambling/player protection",
+      "source_reference": "responsible-gambling research retained in project transcript"
+    },
+    {
+      "id": "STEP5",
+      "topic": "Complaints, withdrawals and payments",
+      "source_reference": "Pasted text(2).txt / research result"
+    },
+    {
+      "id": "STEP6",
+      "topic": "KYC, underage, account security and fraud",
+      "source_reference": "Pasted text(3).txt / research result"
+    },
+    {
+      "id": "STEP7",
+      "topic": "Privacy, payment security and provider due diligence",
+      "source_reference": "Pasted markdown.md and Pasted text(4).txt"
+    },
+    {
+      "id": "STEP8",
+      "topic": "Auditability, security, evaluation and cost",
+      "source_reference": "Pasted text(5).txt"
+    }
+  ],
+  "rule_traceability": [
+    {
+      "rule_id": "SELF_HARM_SIGNAL",
+      "policy_basis_ids": [
+        "STEP4-SELF-HARM",
+        "STEP7-F03"
+      ],
+      "control_classification": "conservative_prototype_control"
+    },
+    {
+      "rule_id": "PCI_SENSITIVE_AUTH_DATA",
+      "policy_basis_ids": [
+        "STEP6-X-01",
+        "STEP7-F14"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "RG_EXPLICIT_SELF_EXCLUSION",
+      "policy_basis_ids": [
+        "STEP4-RG-EXPLICIT-SE"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "RG_LOSS_OF_CONTROL_CLOSURE",
+      "policy_basis_ids": [
+        "STEP4-RG-HARM-CLOSURE"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "rule_id": "UNDERAGE_GAMBLING_REPORTED",
+      "policy_basis_ids": [
+        "STEP6-ON-01",
+        "STEP6-MT-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "RG_ACTIVE_COOL_OFF_REMOVAL",
+      "policy_basis_ids": [
+        "STEP4-RG-ACTIVE-CONTROL"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "RG_LIMIT_RELAXATION",
+      "policy_basis_ids": [
+        "STEP4-RG-LIMIT-CHANGE"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "rule_id": "ACCOUNT_TAKEOVER_ACTIVE",
+      "policy_basis_ids": [
+        "STEP6-ON-03",
+        "STEP6-ON-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "PROMPT_INJECTION_UNTRUSTED_INPUT",
+      "policy_basis_ids": [
+        "STEP6-X-02",
+        "STEP7-F27",
+        "STEP8-NCSC-PROMPT-INJECTION"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "rule_id": "FORMAL_COMPLAINT",
+      "policy_basis_ids": [
+        "STEP5-ON-01",
+        "STEP5-ON-06",
+        "STEP5-MT-03",
+        "STEP5-MT-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "rule_id": "MARKETING_OPTOUT_ONLY",
+      "policy_basis_ids": [
+        "STEP4-MARKETING-OPTOUT-DISTINCTION"
+      ],
+      "control_classification": "conservative_prototype_control"
+    },
+    {
+      "rule_id": "ACCOUNT_REOPEN_REASON_UNKNOWN",
+      "policy_basis_ids": [
+        "STEP4-REOPEN-REVIEW"
+      ],
+      "control_classification": "conservative_prototype_control"
+    },
+    {
+      "rule_id": "THIRD_PARTY_PAYMENT_REPORTED",
+      "policy_basis_ids": [
+        "STEP6-THIRD-PARTY-PAYMENT"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    }
+  ],
+  "note": "Operational outputs record reason codes. Full legal citations remain in the research transcript and decision log; the prototype does not claim compliance."
+}

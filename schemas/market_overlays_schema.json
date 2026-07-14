@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market_overlays_schema.json",
+  "title": "MarketOverlays",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "overlays"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "overlays": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "market",
+          "status",
+          "codes",
+          "routing_effect"
+        ],
+        "properties": {
+          "market": {
+            "type": "string",
+            "enum": [
+              "Ontario",
+              "Malta",
+              "Ireland",
+              "India",
+              "New Zealand"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "established",
+              "casino_applicability_unconfirmed",
+              "prohibited_market",
+              "transitional"
+            ]
+          },
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "INDIA_PROHIBITED_MARKET",
+                "IRELAND_CASINO_APPLICABILITY_UNCONFIRMED",
+                "NZ_TRANSITIONAL_FRAMEWORK"
+              ]
+            },
+            "uniqueItems": true
+          },
+          "routing_effect": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

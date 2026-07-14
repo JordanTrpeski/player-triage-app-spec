@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "player_triage"
+version = "0.1.0"
+description = "Local, provider-independent player-contact triage prototype implementing the frozen Stage 9 policy contract."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = {text = "Proprietary"}
+authors = [{name = "player_triage prototype"}]
+dependencies = [
+  "jsonschema==4.23.0",
+  "referencing==0.35.1",
+  "openpyxl==3.1.5",
+  "typer==0.12.5",
+  "click==8.1.7",
+  "pydantic==2.9.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.3",
+  "mypy==1.11.2",
+]
+local_model = [
+]
+
+[project.scripts]
+player-triage = "player_triage.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["player_triage*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["player_triage"]
+mypy_path = "src"
+strict_optional = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*", "referencing", "referencing.*"]
+ignore_missing_imports = true

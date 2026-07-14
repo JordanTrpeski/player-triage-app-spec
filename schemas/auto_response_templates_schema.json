@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "auto_response_templates_schema.json",
+  "title": "AutoResponseTemplates",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "templates",
+    "not_approved",
+    "rule"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "owner",
+          "approval_status",
+          "body"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "ACK_COMPLIMENT",
+              "ACK_MARKETING_OPTOUT",
+              "FAQ_BONUS_MAX_BET",
+              "FAQ_BONUS_WAGERING_REQUIREMENT",
+              "FAQ_LOYALTY_POINTS_EXPIRY",
+              "FAQ_PROOF_OF_ADDRESS",
+              "FAQ_USERNAME_RECOVERY",
+              "FAQ_WITHDRAWAL_METHOD_TIMING"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "General Support",
+              "Payments Operations",
+              "Payments Security",
+              "KYC Operations",
+              "Promotions",
+              "Technical Support",
+              "Game Integrity",
+              "Responsible Gambling",
+              "Fraud & Account Security",
+              "Complaints",
+              "CRM & Privacy",
+              "Market Compliance",
+              "Platform Security"
+            ]
+          },
+          "approval_status": {
+            "const": "prototype_approved_static"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "pattern": "^(?!.*\\{\\{).*$"
+          }
+        }
+      }
+    },
+    "not_approved": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rule": {
+      "type": "string"
+    }
+  }
+}

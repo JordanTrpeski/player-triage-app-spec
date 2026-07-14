@@ -1,0 +1,52 @@
+{
+  "version": "3.0",
+  "components": {
+    "policy_rules": {
+      "normal_ui": "form_editor",
+      "locked_behavior": "read_only",
+      "guarded_behavior": "editable_with_full_regression",
+      "editable_behavior": "editable",
+      "activation_gate": "all_hard_gates_pass"
+    },
+    "baseline_intent_rules": {
+      "normal_ui": "form_editor_and_pattern_test",
+      "activation_gate": "full_regression"
+    },
+    "redaction_policy": {
+      "normal_ui": "detector_form_and_test_lab",
+      "critical_detectors": [
+        "AUTH_SECRET",
+        "CVV",
+        "PAN"
+      ],
+      "critical_change_behavior": "blocked_in_normal_mode"
+    },
+    "market_overlays": {
+      "normal_ui": "form_editor",
+      "activation_gate": "market_invariants_pass"
+    },
+    "auto_response_templates": {
+      "normal_ui": "static_template_editor",
+      "dynamic_placeholders_allowed": false
+    },
+    "rationale_templates": {
+      "normal_ui": "reason_code_template_editor",
+      "source_text_interpolation_allowed": false
+    },
+    "semantic_constraints": {
+      "normal_ui": "read_only",
+      "advanced_mode": "code_change_only"
+    }
+  },
+  "workflow": [
+    "create_draft",
+    "edit",
+    "schema_validate",
+    "semantic_validate",
+    "behavior_test",
+    "impact_preview",
+    "regression",
+    "activate_or_reject",
+    "rollback_available"
+  ]
+}

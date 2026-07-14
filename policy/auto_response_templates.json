@@ -1,0 +1,57 @@
+{
+  "version": "3.0",
+  "templates": [
+    {
+      "id": "FAQ_WITHDRAWAL_METHOD_TIMING",
+      "owner": "Payments Operations",
+      "approval_status": "prototype_approved_static",
+      "body": "Withdrawal timing depends on the payment method and any required account checks. Please review the published payment-method timing information. This message does not confirm the status of a specific withdrawal."
+    },
+    {
+      "id": "FAQ_BONUS_WAGERING_REQUIREMENT",
+      "owner": "Promotions",
+      "approval_status": "prototype_approved_static",
+      "body": "Wagering requirements and game contribution rules depend on the promotion terms that applied when the offer was accepted. Please review the applicable promotion terms before playing."
+    },
+    {
+      "id": "FAQ_BONUS_MAX_BET",
+      "owner": "Promotions",
+      "approval_status": "prototype_approved_static",
+      "body": "Maximum-bet restrictions apply as stated in the promotion terms, including any separate treatment of bonus-buy features. Please review the terms for the exact offer."
+    },
+    {
+      "id": "FAQ_PROOF_OF_ADDRESS",
+      "owner": "KYC Operations",
+      "approval_status": "prototype_approved_static",
+      "body": "Accepted proof-of-address documents and file requirements are listed in the verification guidance. Do not send identity documents or sensitive payment data through an unapproved support channel."
+    },
+    {
+      "id": "FAQ_USERNAME_RECOVERY",
+      "owner": "General Support",
+      "approval_status": "prototype_approved_static",
+      "body": "Use the approved account-recovery process associated with the registered email address. Support will not disclose or change authentication details through an unverified request."
+    },
+    {
+      "id": "ACK_MARKETING_OPTOUT",
+      "owner": "CRM & Privacy",
+      "approval_status": "prototype_approved_static",
+      "body": "Your request to stop promotional communications has been recorded for processing. This request does not close or self-exclude the account."
+    },
+    {
+      "id": "FAQ_LOYALTY_POINTS_EXPIRY",
+      "owner": "Promotions",
+      "approval_status": "prototype_approved_static",
+      "body": "Loyalty-point expiry and redemption rules are set out in the current loyalty-program terms. Please consult those terms for the applicable expiry period."
+    },
+    {
+      "id": "ACK_COMPLIMENT",
+      "owner": "General Support",
+      "approval_status": "prototype_approved_static",
+      "body": "Thank you for the feedback. It will be shared with the relevant team."
+    }
+  ],
+  "not_approved": [
+    "GENERAL_TAX_DISCLAIMER"
+  ],
+  "rule": "The prototype selects a template ID but does not send messages."
+}

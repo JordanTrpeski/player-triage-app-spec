@@ -1,0 +1,45 @@
+{
+  "version": "3.0",
+  "rules": [
+    {
+      "id": "LINK_SAME_PLAYER_AND_EXPLICIT_REFERENCE",
+      "conditions": [
+        "same local player_id",
+        "same normalized ticket/withdrawal reference or explicit follow-up wording",
+        "within configured linkage window"
+      ],
+      "output": [
+        "related_message_ids",
+        "first_contact_message_id",
+        "previous_contact_count"
+      ]
+    },
+    {
+      "id": "LINK_SAME_PLAYER_FOLLOWUP",
+      "conditions": [
+        "same local player_id",
+        "follow-up/again/second email/no reply wording",
+        "within configured linkage window"
+      ],
+      "output": [
+        "related_message_ids",
+        "first_contact_message_id",
+        "previous_contact_count"
+      ]
+    }
+  ],
+  "privacy": "Raw player_id and ticket references are used only locally for linkage and are not written to operational CSV/JSONL.",
+  "dataset_expectations": {
+    "M31": {
+      "related_message_ids": [
+        "M09"
+      ],
+      "first_contact_message_id": "M09",
+      "previous_contact_count": 1
+    },
+    "M09": {
+      "related_message_ids": [],
+      "external_prior_ticket_reference_detected": true
+    }
+  }
+}

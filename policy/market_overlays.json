@@ -1,0 +1,41 @@
+{
+  "version": "3.0",
+  "overlays": [
+    {
+      "market": "Ontario",
+      "status": "established",
+      "codes": [],
+      "routing_effect": "none"
+    },
+    {
+      "market": "Malta",
+      "status": "established",
+      "codes": [],
+      "routing_effect": "none"
+    },
+    {
+      "market": "Ireland",
+      "status": "casino_applicability_unconfirmed",
+      "codes": [
+        "IRELAND_CASINO_APPLICABILITY_UNCONFIRMED"
+      ],
+      "routing_effect": "No automatic route change. Preserve the warning and do not present current remote-betting rules as casino duties."
+    },
+    {
+      "market": "India",
+      "status": "prohibited_market",
+      "codes": [
+        "INDIA_PROHIBITED_MARKET"
+      ],
+      "routing_effect": "Add Market Compliance as a secondary team. Do not change the primary category solely because of market status. No automated response may facilitate continued gambling, account activation or payment action."
+    },
+    {
+      "market": "New Zealand",
+      "status": "transitional",
+      "codes": [
+        "NZ_TRANSITIONAL_FRAMEWORK"
+      ],
+      "routing_effect": "No automatic route change. Do not present future licensed-operator deadlines as confirmed transitional duties."
+    }
+  ]
+}

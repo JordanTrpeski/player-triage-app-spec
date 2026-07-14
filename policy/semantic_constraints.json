@@ -1,0 +1,55 @@
+{
+  "version": "3.0",
+  "constraints": [
+    {
+      "id": "SEM_AUTO_ROUTE",
+      "description": "Auto-response requires low priority, approved template, no human review.",
+      "expression": "route == auto_respond iff auto_response_policy == allowed_template and template_id != null and priority == low and human_review_required == false"
+    },
+    {
+      "id": "SEM_CRITICAL",
+      "description": "Critical cases always route to a specialist and require human review.",
+      "expression": "priority == critical -> route == specialist and human_review_required == true"
+    },
+    {
+      "id": "SEM_BYPASS",
+      "description": "All bypass states prohibit a model call and require a reason.",
+      "expression": "model_eligibility startswith bypass_ -> model_called == false and model_bypass_reason != null"
+    },
+    {
+      "id": "SEM_ELIGIBLE",
+      "description": "Eligible states have no bypass reason.",
+      "expression": "model_eligibility in [eligible,eligible_text_only] -> model_bypass_reason == null"
+    },
+    {
+      "id": "SEM_INDIA",
+      "description": "India overlay prohibits automated responses and requires Market Compliance visibility.",
+      "expression": "market_framework_status == prohibited_market -> route != auto_respond and Market Compliance in secondary_teams"
+    },
+    {
+      "id": "SEM_ATTACHMENTS",
+      "description": "Received attachment content never reaches the model.",
+      "expression": "attachment_received -> model_eligibility in [eligible_text_only,bypass_attachment]"
+    },
+    {
+      "id": "SEM_INJECTION",
+      "description": "Prompt injection always bypasses model in prototype.",
+      "expression": "prompt_injection_detected -> model_eligibility == bypass_untrusted_input and model_called == false"
+    },
+    {
+      "id": "SEM_RATIONALE",
+      "description": "Rationale is generated from reason-code templates and may not quote source text.",
+      "expression": "short_rationale == render(reason_codes, approved_rationale_templates)"
+    },
+    {
+      "id": "SEM_RAW_DATA",
+      "description": "Operational outputs never include raw message, player ID, payment values, or identity-document values.",
+      "expression": "forbidden fields and sensitive patterns absent"
+    },
+    {
+      "id": "SEM_CONFIG",
+      "description": "Only validated and regression-passing configurations can be activated.",
+      "expression": "config.status == validated and impact.hard_gates_passed -> activation allowed"
+    }
+  ]
+}

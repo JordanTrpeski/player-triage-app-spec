@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "redaction_policy_schema.json",
+  "title": "RedactionPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "processing_order",
+    "detectors",
+    "attachment_policy",
+    "fail_closed_when",
+    "prompt_injection_patterns",
+    "prompt_injection_action",
+    "sanitization_rule",
+    "behaviour_fixtures",
+    "prototype_limitations"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "processing_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "detectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "replacement",
+          "model_action",
+          "audit"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "regex",
+              "regex_context",
+              "pan_candidate_luhn"
+            ]
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "candidate_pattern": {
+            "type": "string"
+          },
+          "negative_context_patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "digit_count_min": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "digit_count_max": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replacement": {
+            "type": "string"
+          },
+          "model_action": {
+            "type": "string"
+          },
+          "audit": {
+            "type": "string"
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "patterns"
+            ]
+          },
+          {
+            "required": [
+              "candidate_pattern"
+            ]
+          }
+        ]
+      }
+    },
+    "attachment_policy": {
+      "type": "object"
+    },
+    "fail_closed_when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prompt_injection_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prompt_injection_action": {
+      "const": "bypass_untrusted_input"
+    },
+    "sanitization_rule": {
+      "type": "string"
+    },
+    "behaviour_fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "message_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message_id": {
+            "type": "string",
+            "pattern": "^M\\d{2}$"
+          },
+          "expected_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expected_not_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expected_prompt_injection": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "prototype_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

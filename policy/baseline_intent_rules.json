@@ -1,0 +1,424 @@
+{
+  "version": "3.0",
+  "rules": [
+    {
+      "id": "INT_WITHDRAWAL_STATUS",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "withdrawal_status_first_contact",
+      "score": 70,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bwithdrawal\\b",
+        "(?i)\\b(?:pending|stuck|not received|where is my money|process)\\b"
+      ]
+    },
+    {
+      "id": "INT_FAILED_DEPOSIT",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "failed_deposit_authorization_hold",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bdeposit\\b",
+        "(?i)\\b(?:declined|reserved|authorization|released)\\b"
+      ]
+    },
+    {
+      "id": "INT_MISSING_DEPOSIT",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "missing_deposit",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bdeposit\\b",
+        "(?i)\\b(?:not showing|missing|not credited)\\b"
+      ]
+    },
+    {
+      "id": "INT_DUPLICATE_CHARGE",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "duplicate_card_charge",
+      "score": 95,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:duplicate|two charges|charged twice)\\b"
+      ]
+    },
+    {
+      "id": "INT_BALANCE_DISCREPANCY",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "small_balance_discrepancy",
+      "score": 75,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bbalance\\b",
+        "(?i)\\b(?:less|difference|discrepancy|fee)\\b"
+      ]
+    },
+    {
+      "id": "INT_STATEMENT",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "account_transaction_statement_request",
+      "score": 85,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\baccount statement\\b",
+        "(?i)\\bstatement of all my deposits and withdrawals\\b"
+      ]
+    },
+    {
+      "id": "INT_FREE_SPINS",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "missing_free_spins",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bfree spins\\b",
+        "(?i)\\b(?:not credited|never showed|missing)\\b"
+      ]
+    },
+    {
+      "id": "INT_CASHBACK",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "cashback_calculation_query",
+      "score": 70,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\bcashback\\b"
+      ]
+    },
+    {
+      "id": "INT_WAGERING",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "wagering_requirement_information",
+      "score": 80,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:wagering|35x|live casino bets)\\b"
+      ]
+    },
+    {
+      "id": "INT_BONUS_MAX_BET",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "bonus_max_bet_terms",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bmax bet\\b",
+        "(?i)\\bbonus buys?\\b"
+      ]
+    },
+    {
+      "id": "INT_PROMO_ELIGIBILITY",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "advertised_bonus_eligibility_dispute",
+      "score": 80,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\b(?:advertis|instagram|bonus)\\b",
+        "(?i)\\b(?:excluded|eligib|add it)\\b"
+      ]
+    },
+    {
+      "id": "INT_LOYALTY",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "loyalty_points_expiry",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\bloyalty points\\b",
+        "(?i)\\bexpire\\b"
+      ]
+    },
+    {
+      "id": "INT_KYC_PENDING",
+      "enabled": true,
+      "category": "KYC & Verification",
+      "intent": "verification_pending",
+      "score": 90,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\b(?:verification|kyc)\\b",
+        "(?i)\\bpending\\b"
+      ]
+    },
+    {
+      "id": "INT_PROOF_ADDRESS",
+      "enabled": true,
+      "category": "KYC & Verification",
+      "intent": "proof_of_address_requirements",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\bproof of address\\b"
+      ]
+    },
+    {
+      "id": "INT_KYC_UPLOAD",
+      "enabled": true,
+      "category": "KYC & Verification",
+      "intent": "identity_document_upload_failure",
+      "score": 95,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:passport|identity document).{0,60}(?:upload|error 413|size limit)\\b",
+        "(?i)\\b(?:upload|error 413|size limit).{0,60}(?:passport|identity document)\\b"
+      ]
+    },
+    {
+      "id": "INT_MOBILE_CHANGE",
+      "enabled": true,
+      "category": "KYC & Verification",
+      "intent": "registered_mobile_change_request",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:new phone number|change registered mobile|update.*number)\\b"
+      ]
+    },
+    {
+      "id": "INT_LOGIN",
+      "enabled": true,
+      "category": "General",
+      "intent": "login_password_reset_failure",
+      "score": 80,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:cannot log in|wrong password|reset it)\\b"
+      ]
+    },
+    {
+      "id": "INT_USERNAME",
+      "enabled": true,
+      "category": "General",
+      "intent": "forgot_username_routine_recovery",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\bforgot my username\\b"
+      ]
+    },
+    {
+      "id": "INT_TAX",
+      "enabled": true,
+      "category": "General",
+      "intent": "tax_information_request",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:tax|declare my winnings)\\b"
+      ]
+    },
+    {
+      "id": "INT_COMPLIMENT",
+      "enabled": true,
+      "category": "General",
+      "intent": "compliment_no_action",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:brilliant|compliment|give her a raise|no action needed)\\b"
+      ]
+    },
+    {
+      "id": "INT_APP_CRASH",
+      "enabled": true,
+      "category": "Technical & Game Issues",
+      "intent": "mobile_app_crash",
+      "score": 90,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\bapp crashes?\\b"
+      ]
+    },
+    {
+      "id": "INT_GAME_INTERRUPTION",
+      "enabled": true,
+      "category": "Technical & Game Issues",
+      "intent": "game_interruption_round_status",
+      "score": 80,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:froze|disconnected|internet dropped|kicked.*lobby)\\b"
+      ]
+    },
+    {
+      "id": "INT_GAME_DISPUTE",
+      "enabled": true,
+      "category": "Technical & Game Issues",
+      "intent": "game_result_dispute",
+      "score": 95,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\b(?:missing win|paid out|investigated with the game provider|balance does not include the win)\\b"
+      ]
+    },
+    {
+      "id": "INT_VIP_BONUS",
+      "enabled": true,
+      "category": "Bonuses & Promotions",
+      "intent": "vip_bonus_contact_unanswered",
+      "score": 80,
+      "match_mode": "any",
+      "patterns": [
+        "(?i)\\bvip manager\\b",
+        "(?i)\\bbirthday bonus\\b"
+      ]
+    },
+    {
+      "id": "INT_WITHDRAWAL_AFTER_BONUS",
+      "enabled": true,
+      "category": "Payments & Withdrawals",
+      "intent": "withdrawal_timing_after_bonus",
+      "score": 98,
+      "match_mode": "all",
+      "patterns": [
+        "(?i)\\b(?:completed|finished)\\s+(?:the\\s+)?wagering\\b",
+        "(?i)\\bwithdraw\\b",
+        "(?i)\\bskrill\\b"
+      ]
+    }
+  ],
+  "post_classification_refinements": [
+    {
+      "id": "REF_REPEAT_WITHDRAWAL",
+      "when": {
+        "intent": "withdrawal_status_first_contact",
+        "previous_contact_count_gte": 1
+      },
+      "set": {
+        "intent": "withdrawal_repeated_unresolved",
+        "minimum_priority": "high"
+      },
+      "add": {
+        "risk_flags": [
+          "repeat_contact"
+        ],
+        "reason_codes": [
+          "WITHDRAWAL_REPEAT_CONTACT"
+        ]
+      }
+    },
+    {
+      "id": "REF_WITHDRAWAL_TIMING_AFTER_BONUS",
+      "when": {
+        "contains_bonus_context": true,
+        "intent": "withdrawal_status_first_contact",
+        "account_specific": false
+      },
+      "set": {
+        "intent": "withdrawal_timing_after_bonus",
+        "priority": "low",
+        "route": "auto_respond",
+        "assigned_team": "Payments Operations",
+        "auto_response_policy": "allowed_template",
+        "auto_response_template_id": "FAQ_WITHDRAWAL_METHOD_TIMING",
+        "human_review_required": false
+      }
+    },
+    {
+      "id": "REF_CASHBACK_DISPUTE",
+      "when": {
+        "intent": "cashback_calculation_query",
+        "explicit_expected_vs_received_amount": true
+      },
+      "set": {
+        "intent": "cashback_amount_dispute"
+      }
+    },
+    {
+      "id": "REF_GAME_DISPUTE",
+      "when": {
+        "intent": "game_interruption_round_status",
+        "claimed_missing_win": true
+      },
+      "set": {
+        "intent": "game_result_dispute",
+        "minimum_priority": "high",
+        "route": "specialist",
+        "assigned_team": "Game Integrity"
+      },
+      "add": {
+        "risk_flags": [
+          "provider_investigation_requested"
+        ],
+        "reason_codes": [
+          "GAME_RESULT_DISPUTE"
+        ]
+      }
+    },
+    {
+      "id": "REF_PROMPT_INJECTION",
+      "when": {
+        "prompt_injection_detected": true
+      },
+      "set": {
+        "model_eligibility": "bypass_untrusted_input",
+        "model_bypass_reason": "prompt_injection_detected",
+        "human_review_required": true
+      },
+      "add": {
+        "secondary_teams": [
+          "Platform Security"
+        ],
+        "reason_codes": [
+          "PROMPT_INJECTION_DETECTED"
+        ]
+      }
+    }
+  ],
+  "behaviour_fixtures": [
+    {
+      "id": "B01",
+      "message_id": "M12",
+      "expected_top_intent": "withdrawal_timing_after_bonus"
+    },
+    {
+      "id": "B02",
+      "message_id": "M27",
+      "expected_top_intent": "withdrawal_timing_after_bonus"
+    },
+    {
+      "id": "B03",
+      "message_id": "M34",
+      "expected_top_intent": "withdrawal_timing_after_bonus"
+    },
+    {
+      "id": "B04",
+      "message_id": "M26",
+      "expected_top_intent": "bonus_max_bet_terms"
+    },
+    {
+      "id": "B05",
+      "message_id": "M29",
+      "expected_top_intent": "game_result_dispute"
+    },
+    {
+      "id": "B06",
+      "message_id": "M35",
+      "expected_top_intent": "duplicate_card_charge"
+    },
+    {
+      "id": "B07",
+      "message_id": "M38",
+      "expected_top_intent": "identity_document_upload_failure"
+    },
+    {
+      "id": "B08",
+      "message_id": "M04",
+      "expected_top_intent": "login_password_reset_failure"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "version": "3.0",
+  "categories": [
+    {
+      "name": "Payments & Withdrawals",
+      "definition": "Deposits, withdrawals, balances, payment timing, duplicate charges, transaction histories and payment-method status where fraud is not primary."
+    },
+    {
+      "name": "KYC & Verification",
+      "definition": "Identity verification, document requirements, verification status, identity-data corrections and secure recovery where identity validation is central."
+    },
+    {
+      "name": "Bonuses & Promotions",
+      "definition": "Bonuses, free spins, cashback, loyalty points, wagering requirements and promotional eligibility where a formal complaint is not primary."
+    },
+    {
+      "name": "Technical & Game Issues",
+      "definition": "Application failures, game interruptions, round-state disputes and technical defects affecting gameplay."
+    },
+    {
+      "name": "Responsible Gambling",
+      "definition": "Self-exclusion, loss of control, harm-linked closure, safer-gambling controls, cool-offs, limits and return-to-play risk."
+    },
+    {
+      "name": "Fraud & Compliance",
+      "definition": "Underage gambling, unauthorized account or payment use, account takeover, third-party payment ownership, suspicious documents and material security/compliance allegations."
+    },
+    {
+      "name": "Complaints & Regulatory",
+      "definition": "Explicit formal complaints, unresolved escalations, regulator/ADR/legal escalation and requests about complaint handling or status."
+    },
+    {
+      "name": "General",
+      "definition": "Account support, informational requests, preferences, compliments and other matters not more specifically covered."
+    }
+  ],
+  "priorities": {
+    "critical": "Immediate protective/security handling: explicit self-exclusion, severe loss of control, credible self-harm, underage, sensitive authentication data, or active account/payment compromise.",
+    "high": "Prompt specialist/escalated handling due to significant financial, complaint, security, protective-control or compliance risk.",
+    "medium": "Account-specific investigation or controlled review without immediate critical harm/exposure.",
+    "low": "Routine static information with no account-specific decision, complaint escalation or high-risk signal."
+  },
+  "routes": {
+    "auto_respond": "Only a low-risk approved static template; the prototype does not send it.",
+    "human": "Ordinary account-specific support or investigation by a human agent.",
+    "specialist": "Mandatory specialist handling for high/critical risk or regulated/specialized work."
+  },
+  "primary_category_precedence": [
+    "Responsible Gambling explicit harm/self-exclusion",
+    "Fraud & Compliance underage/active compromise/unauthorized use",
+    "Complaints & Regulatory explicit formal or unresolved escalation",
+    "KYC & Verification",
+    "Payments & Withdrawals",
+    "Technical & Game Issues",
+    "Bonuses & Promotions",
+    "General"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semantic_constraints_schema.json",
+  "title": "SemanticConstraints",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "constraints"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "expression"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SEM_[A-Z0-9_]+$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
