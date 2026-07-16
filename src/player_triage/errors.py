@@ -41,3 +41,7 @@ class UnknownVersionError(ConfigurationError):
 
 class ControlledVocabularyError(ConfigurationError):
     """Controlled vocabulary is internally inconsistent (duplicates or missing keys)."""
+
+
+class HashIntegrityError(ConfigurationError):
+    """A policy component's on-disk digest does not match the configuration manifest."""

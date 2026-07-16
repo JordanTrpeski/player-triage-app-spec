@@ -87,6 +87,10 @@
         "semantic_constraints": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "derived_refinement_rules": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
         }
       }
     },

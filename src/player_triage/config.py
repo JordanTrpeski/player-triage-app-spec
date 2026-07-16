@@ -24,6 +24,7 @@ code can rely on:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .errors import (
     ControlledVocabularyError,
+    HashIntegrityError,
     InvalidConfigurationError,
     MissingConfigurationError,
     SchemaValidationError,
@@ -43,7 +45,14 @@ from .paths import policy_dir, resolve_app_root
 from .schema import SchemaRegistry, build_schema_registry
 
 
-EXPECTED_CONFIGURATION_VERSION: Final[str] = "policy-3.0.0"
+EXPECTED_CONFIGURATION_VERSION: Final[str] = "policy-3.2.0"
+
+# Manifest-declared optional policy component (introduced in policy-3.1.0). It is
+# loaded, schema-validated and hash-verified only when the active manifest lists
+# it. A manifest that omits it (e.g. a rollback to policy-3.0.0) simply loads no
+# derived-refinement rules, restoring the earlier behaviour.
+DERIVED_REFINEMENT_COMPONENT: Final[str] = "derived_refinement_rules"
+DERIVED_REFINEMENT_SCHEMA: Final[str] = "derived_refinement_rules_schema.json"
 
 # Component name → filename under ``policy/``. This is the ONLY place in source
 # where these filenames live. Every downstream consumer reaches component data
@@ -189,6 +198,20 @@ class AppConfig:
     def schema_ids(self) -> Mapping[str, str]:
         return self.schema_registry.ids
 
+    @property
+    def bundle_version(self) -> str:
+        """The active policy-bundle version id from the manifest."""
+
+        return self.manifest.version_id
+
+    def has_component(self, name: str) -> bool:
+        return name in self.components
+
+    def component_digest(self, name: str) -> str | None:
+        """The manifest-recorded SHA-256 digest for a component, if any."""
+
+        return self.manifest.components.get(name)
+
 
 def _read_json(path: Path, component: str) -> Any:
     if not path.is_file():
@@ -299,6 +322,49 @@ def _check_cross_component_consistency(
         )
 
 
+def _load_manifest_declared_component(
+    directory: Path,
+    manifest: "ConfigurationManifest",
+    components: dict[str, Mapping[str, Any]],
+    schema_registry: SchemaRegistry,
+    *,
+    component_name: str,
+    schema_filename: str,
+) -> None:
+    """Load, schema-validate and hash-verify an optional manifest-declared component.
+
+    A component is only loaded when the active manifest lists it under
+    ``components`` (with its expected digest). Absence is a valid governed state
+    (e.g. a rollback to a version that predates the component). When declared, a
+    missing file, malformed JSON, schema failure or digest mismatch all fail
+    closed.
+    """
+
+    expected_digest = manifest.components.get(component_name)
+    if expected_digest is None:
+        return  # component not part of the active bundle (rolled back / absent)
+
+    path = directory / f"{component_name}.json"
+    raw = _read_json(path, component_name)  # raises MissingConfigurationError if absent
+
+    schema_id = schema_registry.ids.get(schema_filename)
+    if schema_id is None:
+        raise MissingConfigurationError(
+            component=schema_filename,
+            message="schema referenced by loader is not present under schemas/",
+        )
+    schema_registry.validate(schema_id, raw, component_hint=component_name)
+
+    actual_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual_digest != expected_digest:
+        raise HashIntegrityError(
+            component=component_name,
+            message="on-disk digest does not match the configuration manifest",
+            path=path,
+        )
+    components[component_name] = raw
+
+
 def load_app_config(
     app_root: Path | str | None = None,
     *,
@@ -362,6 +428,15 @@ def load_app_config(
 
     _check_vocab_no_duplicates(vocab)
     _check_cross_component_consistency(vocab, components)
+
+    _load_manifest_declared_component(
+        directory,
+        manifest,
+        components,
+        schema_registry,
+        component_name=DERIVED_REFINEMENT_COMPONENT,
+        schema_filename=DERIVED_REFINEMENT_SCHEMA,
+    )
 
     return AppConfig(
         app_root=root,

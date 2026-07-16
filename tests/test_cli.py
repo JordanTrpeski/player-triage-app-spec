@@ -18,15 +18,20 @@ def test_validate_policy_command(app_root: Path) -> None:
     assert "POLICY LOAD COMPLETE" in result.output
 
 
-def test_run_command_not_yet_implemented() -> None:
-    result = runner.invoke(app, ["run"])
-    assert result.exit_code == 2
-    assert "not implemented in Phase 01" in result.output
+def test_run_command_classifies(app_root: Path) -> None:
+    result = runner.invoke(app, ["run", "--app-root", str(app_root)])
+    assert result.exit_code == 0, result.output
+    assert "RUN COMPLETE (rules_only)" in result.output
+    assert "mode: rules_only" in result.output
+    # Output must be sanitized: no player identifier pattern.
+    assert not __import__("re").search(r"\bP-\d{5}\b", result.output)
 
 
-def test_evaluate_command_not_yet_implemented() -> None:
-    result = runner.invoke(app, ["evaluate"])
-    assert result.exit_code == 2
+def test_evaluate_command_reports_gates(app_root: Path) -> None:
+    result = runner.invoke(app, ["evaluate", "--app-root", str(app_root)])
+    assert result.exit_code == 0, result.output
+    assert "SAFETY GATES: 15/15 passed" in result.output
+    assert "EVALUATE COMPLETE (all safety gates passed)" in result.output
 
 
 def test_demo_command_not_yet_implemented() -> None:

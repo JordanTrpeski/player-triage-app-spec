@@ -136,6 +136,14 @@
       "implemented_by": "architecture boundary",
       "verified_by": "negative capability tests",
       "mandatory": true
+    },
+    {
+      "id": "APP-018",
+      "area": "Governance",
+      "requirement": "Derived-refinement decisions are a versioned, schema-validated, hash-verified and auditable policy component with rollback",
+      "implemented_by": "policy/derived_refinement_rules.json + derived-refinement loader/interpreter",
+      "verified_by": "test_phase03c_governance",
+      "mandatory": false
     }
   ]
 }

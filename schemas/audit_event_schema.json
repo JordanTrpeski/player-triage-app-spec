@@ -233,6 +233,30 @@
               "processing_time_ms": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "component_provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "policy_bundle_version"
+                ],
+                "properties": {
+                  "policy_bundle_version": {
+                    "type": "string"
+                  },
+                  "derived_refinement_version": {
+                    "type": ["string", "null"]
+                  },
+                  "derived_refinement_digest": {
+                    "type": ["string", "null"]
+                  },
+                  "derived_rules_triggered": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }

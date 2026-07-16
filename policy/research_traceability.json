@@ -134,5 +134,89 @@
       "control_classification": "official_guidance_and_conservative_control"
     }
   ],
-  "note": "Operational outputs record reason codes. Full legal citations remain in the research transcript and decision log; the prototype does not claim compliance."
+  "derived_rule_traceability": [
+    {
+      "rule_id": "DERIVED_KYC_PENDING_WITH_FUNDS",
+      "source_or_finding": "STEP6-IN-01 KYC/AML handling for pending verification while funds are held",
+      "control_classification": "official_guidance",
+      "affected_output_fields": ["priority", "route", "assigned_team", "secondary_intents", "risk_flags", "reason_codes"],
+      "rationale": "Pending KYC combined with blocked funds is elevated for specialist identity review; the system does not decide the verification outcome.",
+      "owner": "KYC Operations",
+      "review_requirement": "full_regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_GAME_INTERRUPTION_REVIEW",
+      "source_or_finding": "STEP5-ON-05 game-state review for interrupted rounds",
+      "control_classification": "operational_routing_decision",
+      "affected_output_fields": ["route", "assigned_team", "secondary_teams", "risk_flags", "reason_codes"],
+      "rationale": "An interrupted round with unknown outcome is routed to Game Integrity; no round outcome or compensation is assumed.",
+      "owner": "Game Integrity",
+      "review_requirement": "regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_WITHDRAWAL_REPEAT_TEXT",
+      "source_or_finding": "STEP5-ON-06 repeat-contact handling for unresolved withdrawals",
+      "control_classification": "operational_routing_decision",
+      "affected_output_fields": ["intent", "priority", "assigned_team", "secondary_teams", "risk_flags", "reason_codes"],
+      "rationale": "A cited prior ticket establishes repeat-contact semantics and raises urgency; it does not by itself become a formal complaint.",
+      "owner": "Payments Operations",
+      "review_requirement": "regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_REGISTERED_CHANNEL_CHANGE",
+      "source_or_finding": "STEP6-ON-03 account-security review for authentication-channel changes",
+      "control_classification": "official_guidance",
+      "affected_output_fields": ["priority", "route", "assigned_team", "secondary_teams", "risk_flags", "reason_codes"],
+      "rationale": "Changing a registered authentication channel is a security-sensitive action requiring specialist identity review with fraud coordination.",
+      "owner": "KYC Operations",
+      "review_requirement": "full_regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_INJECTION_WITHDRAWAL_BUSINESS",
+      "source_or_finding": "STEP6-X-02 / STEP8-NCSC-PROMPT-INJECTION untrusted-input handling",
+      "control_classification": "conservative_prototype_control",
+      "affected_output_fields": ["intent", "assigned_team", "reason_codes"],
+      "rationale": "A model-ineligible prompt-injection message still receives deterministic business classification of its legitimate withdrawal issue; the model bypass and security flag are set by the locked pre-model injection rule and are not changed here.",
+      "owner": "Platform Security",
+      "review_requirement": "full_regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_REPEAT_WITHDRAWAL_ESCALATION",
+      "source_or_finding": "STEP5-ON-01 complaint escalation for unresolved repeat contact",
+      "control_classification": "official_guidance",
+      "affected_output_fields": ["category", "intent", "priority", "route", "assigned_team", "secondary_intents", "secondary_teams", "risk_flags", "reason_codes"],
+      "rationale": "Linked repeat contact with explicit escalation wording is treated as a complaint escalation; repeat contact alone is not.",
+      "owner": "Complaints",
+      "review_requirement": "full_regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_SMALL_BALANCE_DISCREPANCY",
+      "source_or_finding": "STEP5-BALANCE-RECON account ledger reconciliation for small discrepancies",
+      "control_classification": "operational_routing_decision",
+      "affected_output_fields": ["priority", "route", "assigned_team", "auto_response_policy", "risk_flags", "reason_codes"],
+      "rationale": "Small account-specific discrepancies are low priority but require human ledger review; no static auto-response is permitted.",
+      "owner": "Payments Operations",
+      "review_requirement": "regression_before_activation"
+    },
+    {
+      "rule_id": "DERIVED_DUPLICATE_CARD_CHARGE",
+      "source_or_finding": "STEP5-ON-03 duplicate-charge reconciliation",
+      "control_classification": "operational_routing_decision",
+      "affected_output_fields": ["priority", "route", "assigned_team", "secondary_teams", "risk_flags", "reason_codes"],
+      "rationale": "A duplicate charge with a refund request is routed to payments reconciliation; fraud is a secondary team and is not asserted as confirmed.",
+      "owner": "Payments Operations",
+      "review_requirement": "regression_before_activation"
+    }
+  ],
+  "note": "Operational outputs record reason codes. Full legal citations remain in the research transcript and decision log; the prototype does not claim compliance. Derived-refinement routing choices are recorded as operational routing decisions or official guidance, never as direct legal requirements.",
+  "change_log": [
+    {
+      "bundle_version": "policy-3.2.0",
+      "phase": "03D",
+      "summary": "Detector hardening: broadened AUTH_SECRET value-bearing detection (OTP/PIN/verification/recovery/MFA codes) and prompt-injection phrase families in redaction_policy; added negation/informational/quoted/multilingual guards (plus German separable-verb coverage) to RG_EXPLICIT_SELF_EXCLUSION in policy_rules; broadened INT_FREE_SPINS credit wording in baseline_intent_rules.",
+      "control_classification": "conservative_prototype_control",
+      "affected_rules_or_detectors": ["AUTH_SECRET", "prompt_injection_patterns", "RG_EXPLICIT_SELF_EXCLUSION", "INT_FREE_SPINS"],
+      "note": "Explicit self-exclusion recall was preserved; negation guards suppress only negated/informational/quoted mentions and never suppress independent harm/loss-of-control escalation. Detection remains conservative and is not claimed to be complete."
+    }
+  ]
 }

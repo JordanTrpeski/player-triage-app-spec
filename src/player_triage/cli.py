@@ -15,7 +15,9 @@ from typing import Annotated
 import typer
 
 from .config import EXPECTED_CONFIGURATION_VERSION, load_app_config
+from .engine import TriageEngine
 from .errors import ConfigurationError
+from .evaluation import run_evaluation
 from .pipeline import ingest as run_ingest
 
 app = typer.Typer(
@@ -121,19 +123,103 @@ def _not_yet_implemented(command: str) -> "typer.Exit":
 
 
 @app.command("run")
-def run(app_root: AppRootOption = None) -> None:
-    """Run the end-to-end triage pipeline over the input dataset (later phase)."""
+def run(
+    app_root: AppRootOption = None,
+    input_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--input",
+            help="Input CSV or XLSX. Defaults to input/dataset_player_messages.csv.",
+            exists=False,
+            file_okay=True,
+            dir_okay=False,
+            resolve_path=True,
+        ),
+    ] = None,
+) -> None:
+    """Run the deterministic rules-only triage over the input dataset.
 
-    _ = app_root
-    raise _not_yet_implemented("run")
+    Output is sanitized: one line per message showing message_id, category,
+    priority, route, assigned team and the stage/rule decision path. It never
+    prints player identifiers, subject/body text, redacted text or detected
+    sensitive values.
+    """
+
+    try:
+        config = load_app_config(app_root)
+        engine = TriageEngine.from_config(config)
+        ingested = run_ingest(config, input_path=input_path)
+    except ConfigurationError as exc:
+        raise _fail(exc.component, str(exc)) from exc
+
+    typer.echo(f"OK app_root: {config.app_root}")
+    typer.echo(f"OK mode: rules_only")
+    for message in ingested:
+        result = engine.classify(message)
+        decision = result.decision
+        typer.echo(
+            f"OK {decision['message_id']} category={decision['category']} "
+            f"intent={decision['intent']} priority={decision['priority']} "
+            f"route={decision['route']} team={decision['assigned_team']} "
+            f"model_called={decision['model_called']} "
+            f"status={decision['processing_status']} "
+            f"path=[{result.decision_path()}]"
+        )
+    typer.echo("RUN COMPLETE (rules_only)")
 
 
 @app.command("evaluate")
-def evaluate(app_root: AppRootOption = None) -> None:
-    """Run the evaluation and regression suite against the frozen ground truth (later phase)."""
+def evaluate(
+    app_root: AppRootOption = None,
+    input_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--input",
+            help="Input CSV or XLSX. Defaults to input/dataset_player_messages.csv.",
+            exists=False,
+            file_okay=True,
+            dir_okay=False,
+            resolve_path=True,
+        ),
+    ] = None,
+) -> None:
+    """Evaluate the rules-only baseline against the frozen ground truth.
 
-    _ = app_root
-    raise _not_yet_implemented("evaluate")
+    Prints per-field agreement, a sanitized mismatch table (message_id + field
+    + expected/actual enum values only) and the pass/fail status of every
+    safety hard gate. It does not modify the ground truth.
+    """
+
+    try:
+        config = load_app_config(app_root)
+        report = run_evaluation(config, input_path=input_path)
+    except ConfigurationError as exc:
+        raise _fail(exc.component, str(exc)) from exc
+
+    typer.echo(f"OK app_root: {config.app_root}")
+    typer.echo(f"OK evaluated messages: {report.total}")
+    typer.echo(f"OK schema-valid decisions: {report.schema_valid_count}/{report.total}")
+    for field_name in ("category", "intent", "priority", "route", "assigned_team"):
+        agree = report.agreement[field_name]
+        typer.echo(f"OK agreement {field_name}: {agree}/{report.total}")
+
+    typer.echo(f"MISMATCHES: {len(report.mismatches)}")
+    for mismatch in report.mismatches:
+        typer.echo(
+            f"  {mismatch.message_id} {mismatch.field}: expected={mismatch.expected} actual={mismatch.actual}"
+        )
+
+    gates_passed = sum(1 for gate in report.gate_results if gate.passed)
+    typer.echo(f"SAFETY GATES: {gates_passed}/{len(report.gate_results)} passed")
+    for gate in report.gate_results:
+        status = "PASS" if gate.passed else "FAIL"
+        typer.echo(f"  {gate.gate_id} {status}: {gate.detail}")
+
+    if report.all_gates_pass():
+        typer.echo("EVALUATE COMPLETE (all safety gates passed)")
+    else:
+        typer.echo("EVALUATE COMPLETE (safety gate failure)")
+        raise typer.Exit(code=1)
 
 
 @app.command("demo")

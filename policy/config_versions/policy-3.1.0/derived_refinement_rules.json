@@ -1,0 +1,149 @@
+{
+  "version": "3.1.0",
+  "description": "Authoritative, versioned derived-refinement policy component (introduced in policy bundle policy-3.1.0). Generic deterministic refinements applied after the baseline and post-semantic stages. Every rule uses only controlled-vocabulary intents/teams/risk-flags/reason-codes, carries policy_basis_ids and an editability class, and never references a message id or a raw-body equality check. A pre-model safety terminal suppresses all derived rules.",
+  "rules": [
+    {
+      "id": "DERIVED_KYC_PENDING_WITH_FUNDS",
+      "description": "Pending KYC/verification while funds/withdrawal/winnings are blocked -> KYC specialist review at high priority.",
+      "editability": "guarded",
+      "when": {
+        "intent_in": ["verification_pending"],
+        "regex_any": ["(?i)\\b(?:withdraw\\w*|winnings|payout|funds|cash\\s?out|money)\\b"]
+      },
+      "set": {"route": "specialist", "assigned_team": "KYC Operations", "human_review_required": true},
+      "minimum_priority": "high",
+      "add": {
+        "secondary_intents": ["withdrawal_blocked"],
+        "risk_flags": ["identity_document_submitted", "withdrawal_blocked"],
+        "reason_codes": ["KYC_PENDING_WITH_FUNDS"]
+      },
+      "policy_basis_ids": ["STEP6-IN-01", "STEP5-KYC-FUNDS-HOLD"]
+    },
+    {
+      "id": "DERIVED_GAME_INTERRUPTION_REVIEW",
+      "description": "Interrupted/incomplete round with unknown outcome -> Game Integrity specialist; no assumption about outcome or compensation.",
+      "editability": "guarded",
+      "when": {
+        "intent_in": ["game_interruption_round_status"],
+        "regex_any": ["(?i)\\b(?:round|game|spin|hand|bet|wager|outcome|multiplier|settle\\w*|win|lobby|froze|frozen|disconnect\\w*|reconnect\\w*|incomplete)\\b"]
+      },
+      "set": {"route": "specialist", "assigned_team": "Game Integrity", "human_review_required": true},
+      "add": {
+        "secondary_teams": ["Technical Support"],
+        "risk_flags": ["game_frozen", "round_outcome_unknown"],
+        "reason_codes": ["GAME_INTERRUPTION_REVIEW"]
+      },
+      "policy_basis_ids": ["STEP5-ON-05", "STEP5-NZ-06"]
+    },
+    {
+      "id": "DERIVED_WITHDRAWAL_REPEAT_TEXT",
+      "description": "First-contact withdrawal status that cites a prior ticket/previous contact -> repeated unresolved withdrawal at high priority (text establishes repeat even when no earlier row is linked). Ignored under prompt injection.",
+      "editability": "guarded",
+      "when": {
+        "intent_in": ["withdrawal_status_first_contact"],
+        "flags_none": ["prompt_injection_detected"],
+        "regex_any": ["(?i)\\b(?:ticket|reference\\s?(?:number|no\\.?|#)|case\\s?(?:number|no\\.?|#)|last time|previously|already (?:contacted|emailed|raised|reported|submitted)|chas(?:e|ed|ing)|follow(?:ing)?[- ]?up|second (?:email|time)|no (?:reply|response)|still (?:no|waiting|have\\s?n))\\b"]
+      },
+      "set": {"intent": "withdrawal_repeated_unresolved", "assigned_team": "Payments Operations"},
+      "minimum_priority": "high",
+      "add": {
+        "secondary_teams": ["Complaints"],
+        "risk_flags": ["repeat_contact", "prior_ticket", "dissatisfaction"],
+        "reason_codes": ["WITHDRAWAL_REPEAT_CONTACT"]
+      },
+      "policy_basis_ids": ["STEP5-ON-06", "STEP5-MT-03"]
+    },
+    {
+      "id": "DERIVED_REGISTERED_CHANNEL_CHANGE",
+      "description": "Request to change the registered authentication channel / lost OTP channel -> KYC specialist with fraud coordination.",
+      "editability": "guarded",
+      "when": {
+        "intent_in": ["registered_mobile_change_request"]
+      },
+      "set": {"route": "specialist", "assigned_team": "KYC Operations", "human_review_required": true},
+      "minimum_priority": "high",
+      "add": {
+        "secondary_teams": ["Fraud & Account Security"],
+        "risk_flags": ["registered_channel_loss", "otp_unavailable", "identity_change"],
+        "reason_codes": ["REGISTERED_MOBILE_CHANGE"]
+      },
+      "policy_basis_ids": ["STEP6-ON-03", "STEP6-ON-04"]
+    },
+    {
+      "id": "DERIVED_INJECTION_WITHDRAWAL_BUSINESS",
+      "description": "Model-ineligible prompt-injection message with an underlying pending withdrawal -> classify the legitimate business issue as withdrawal_delay; adversarial instructions ignored, security bypass retained upstream.",
+      "editability": "guarded",
+      "when": {
+        "flags_all": ["prompt_injection_detected"],
+        "intent_in": ["withdrawal_status_first_contact"]
+      },
+      "set": {"intent": "withdrawal_delay", "assigned_team": "Payments Operations"},
+      "add": {"reason_codes": ["WITHDRAWAL_DELAY"]},
+      "policy_basis_ids": ["STEP6-X-02", "STEP8-NCSC-PROMPT-INJECTION"]
+    },
+    {
+      "id": "DERIVED_REPEAT_WITHDRAWAL_ESCALATION",
+      "description": "Linked repeat contact (linkage or prior-ticket) about an unresolved withdrawal with no reply plus escalation/formal-complaint wording -> repeated withdrawal complaint escalation. Repeat contact alone is insufficient; escalation wording is also required.",
+      "editability": "guarded",
+      "when": {
+        "repeat_or_related": true,
+        "regex_any": ["(?i)\\b(?:withdraw\\w*|payout|funds)\\b"],
+        "regex_all": [
+          "(?i)\\b(?:no (?:reply|response)|still (?:no|waiting)|un(?:answered|resolved)|ignored)\\b",
+          "(?i)\\b(?:take this (?:further|matter)|formal complaint|complain\\w*|escalat\\w*|ombudsman|regulator|agco|igo|adr|final notice|legal)\\b"
+        ]
+      },
+      "set": {
+        "category": "Complaints & Regulatory",
+        "intent": "repeated_withdrawal_complaint_escalation",
+        "route": "specialist",
+        "assigned_team": "Complaints",
+        "human_review_required": true
+      },
+      "minimum_priority": "high",
+      "add": {
+        "secondary_intents": ["withdrawal_delay"],
+        "secondary_teams": ["Payments Operations"],
+        "risk_flags": ["repeat_contact", "no_response", "external_escalation_implied"],
+        "reason_codes": ["FORMAL_COMPLAINT", "REPEAT_CONTACT"]
+      },
+      "policy_basis_ids": ["STEP5-ON-01", "STEP5-MT-04"]
+    },
+    {
+      "id": "DERIVED_SMALL_BALANCE_DISCREPANCY",
+      "description": "Small account-specific balance/fee/rounding discrepancy -> low priority but human ledger review (no static auto-response).",
+      "editability": "editable",
+      "when": {
+        "intent_in": ["small_balance_discrepancy"]
+      },
+      "set": {
+        "priority": "low",
+        "route": "human",
+        "assigned_team": "Payments Operations",
+        "auto_response_policy": "acknowledgment_only",
+        "human_review_required": true
+      },
+      "add": {
+        "risk_flags": ["balance_discrepancy", "low_amount"],
+        "reason_codes": ["BALANCE_RECONCILIATION"]
+      },
+      "policy_basis_ids": ["STEP5-BALANCE-RECON"]
+    },
+    {
+      "id": "DERIVED_DUPLICATE_CARD_CHARGE",
+      "description": "Duplicate card charge with a refund/reversal request -> payments reconciliation specialist; fraud secondary only, not confirmed.",
+      "editability": "guarded",
+      "when": {
+        "intent_in": ["duplicate_card_charge"]
+      },
+      "set": {"route": "specialist", "assigned_team": "Payments Operations", "human_review_required": true},
+      "minimum_priority": "high",
+      "add": {
+        "secondary_teams": ["Fraud & Account Security"],
+        "risk_flags": ["duplicate_charge", "refund_requested", "payment_reconciliation"],
+        "reason_codes": ["DUPLICATE_CHARGE_REVIEW"]
+      },
+      "policy_basis_ids": ["STEP5-ON-03", "STEP5-ON-09"]
+    }
+  ]
+}

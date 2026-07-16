@@ -1,0 +1,721 @@
+{
+  "version": "3.0",
+  "rule_dsl_version": "3.0",
+  "rules": [
+    {
+      "id": "SELF_HARM_SIGNAL",
+      "order": 5,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "field": "combined_text",
+        "regex_any": [
+          "(?i)\\b(?:kill myself|end my life|suicide|hurt myself|self[- ]harm)\\b"
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Responsible Gambling",
+          "intent": "credible_self_harm",
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "self_harm_signal",
+          "auto_response_policy": "prohibited",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "self_harm_signal"
+          ],
+          "reason_codes": [
+            "SELF_HARM_ESCALATION"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-SELF-HARM",
+        "STEP7-F03"
+      ],
+      "control_classification": "conservative_prototype_control"
+    },
+    {
+      "id": "PCI_SENSITIVE_AUTH_DATA",
+      "order": 10,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "any": [
+          {
+            "flag": "cvv_detected",
+            "equals": true
+          },
+          {
+            "flag": "auth_secret_detected",
+            "equals": true
+          },
+          {
+            "all": [
+              {
+                "flag": "pan_detected",
+                "equals": true
+              },
+              {
+                "flag": "card_context_detected",
+                "equals": true
+              }
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Payments Security",
+          "model_eligibility": "bypass_sensitive",
+          "model_bypass_reason": "sensitive_payment_or_authentication_data",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "sensitive_authentication_data"
+          ],
+          "reason_codes": [
+            "PCI_SENSITIVE_AUTH_DATA"
+          ],
+          "secondary_teams": [
+            "Payments Operations",
+            "CRM & Privacy"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP6-X-01",
+        "STEP7-F14"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "RG_EXPLICIT_SELF_EXCLUSION",
+      "order": 20,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "field": "combined_text",
+        "regex_any": [
+          "(?i)\\bself[- ]?exclud(?:e|ed|ing|sion)\\b",
+          "(?i)\\bpermanent(?:ly)?\\s+(?:close|exclude)",
+          "(?i)dauerhaft.{0,40}selbst.{0,20}ausschlie(?:ssen|\u00dfen)",
+          "(?i)konto.{0,30}endg(?:u|\u00fc)ltig.{0,20}schlie(?:ssen|\u00dfen)"
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Responsible Gambling",
+          "intent": "explicit_permanent_self_exclusion",
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "explicit_self_exclusion",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "self_exclusion_explicit"
+          ],
+          "reason_codes": [
+            "RG_EXPLICIT_SELF_EXCLUSION"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-RG-EXPLICIT-SE"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "RG_LOSS_OF_CONTROL_CLOSURE",
+      "order": 30,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "any": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:cannot|can't|cant) stop (?:myself|gambling|playing)",
+              "(?i)\\b(?:cannot|can't|cant) control (?:my )?gambling",
+              "(?i)\\bkeep (?:doing this|reversing).{0,80}lost? it all",
+              "(?i)\\bgambling (?:problem|addiction)\\b"
+            ]
+          },
+          {
+            "all": [
+              {
+                "field": "combined_text",
+                "regex_any": [
+                  "(?i)\\bclose my account\\b"
+                ]
+              },
+              {
+                "field": "combined_text",
+                "regex_any": [
+                  "(?i)\\b(?:cannot stop|loss of control|gambling problem|addicted)\\b"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Responsible Gambling",
+          "intent": "harm_linked_account_closure",
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "explicit_loss_of_control",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "loss_of_control",
+            "harm_linked_closure"
+          ],
+          "reason_codes": [
+            "RG_LOSS_OF_CONTROL_CLOSURE"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-RG-HARM-CLOSURE"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "id": "UNDERAGE_GAMBLING_REPORTED",
+      "order": 40,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "field": "combined_text",
+        "regex_any": [
+          "(?i)\\b(?:my|our)\\s+(?:son|daughter|child).{0,40}\\b(?:1[0-7]|minor|underage)\\b",
+          "(?i)\\b(?:1[0-7])\\s*(?:year|yr)[- ]?old.{0,30}\\b(?:son|daughter|child)\\b",
+          "(?i)\\b(?:i am|i'm|im)\\s+(?:1[0-7])\\b.{0,50}\\b(?:bet|gambl|casino|deposit)",
+          "(?i)\\bminor\\b.{0,50}\\b(?:account|card|deposit|gambl)"
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Fraud & Compliance",
+          "intent": "underage_gambling_report",
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Fraud & Account Security",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "underage_reported",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "underage_reported"
+          ],
+          "reason_codes": [
+            "UNDERAGE_GAMBLING_REPORTED"
+          ],
+          "secondary_teams": [
+            "Responsible Gambling",
+            "KYC Operations"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP6-ON-01",
+        "STEP6-MT-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "THIRD_PARTY_PAYMENT_REPORTED",
+      "order": 45,
+      "phase": "pre_model",
+      "terminal": false,
+      "editability": "guarded",
+      "ui_group": "Payments/Security",
+      "enabled": true,
+      "match": {
+        "field": "combined_text",
+        "regex_any": [
+          "(?i)\\b(?:my|our).{0,35}\\b(?:son|daughter|child).{0,100}\\b(?:used|using).{0,30}\\b(?:my|our) card\\b",
+          "(?i)\\b(?:my|our)\\s+(?:son|daughter|child|partner|friend).{0,100}\\b(?:used|using).{0,30}\\b(?:my|our) card\\b",
+          "(?i)\\b(?:someone|another person|third party).{0,60}\\b(?:used|using).{0,30}\\b(?:my|their) card\\b",
+          "(?i)\\b(?:used|using)\\s+(?:someone else['\u2019]s|another person['\u2019]s)\\s+card\\b"
+        ]
+      },
+      "effects": {
+        "set": {},
+        "add": {
+          "risk_flags": [
+            "third_party_payment",
+            "unauthorized_card_use"
+          ],
+          "reason_codes": [
+            "THIRD_PARTY_PAYMENT_REPORTED"
+          ],
+          "secondary_intents": [
+            "third_party_payment"
+          ],
+          "secondary_teams": [
+            "Payments Security"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP6-THIRD-PARTY-PAYMENT"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "id": "RG_ACTIVE_COOL_OFF_REMOVAL",
+      "order": 50,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "all": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:cool[- ]?off|time[- ]?out|temporary break)\\b"
+            ]
+          },
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:remove|cancel|shorten|undo|lift)\\b"
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Responsible Gambling",
+          "intent": "remove_active_cool_off",
+          "priority": "high",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "active_control_relaxation",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "cool_off_active",
+            "early_removal_requested"
+          ],
+          "reason_codes": [
+            "RG_ACTIVE_COOL_OFF_REMOVAL"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-RG-ACTIVE-CONTROL"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "RG_LIMIT_RELAXATION",
+      "order": 60,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "all": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:deposit|loss|spend|time) limit\\b"
+            ]
+          },
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:raise|increase|remove|higher|lift)\\b"
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Responsible Gambling",
+          "intent": "deposit_limit_increase",
+          "priority": "medium",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "limit_relaxation_request",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "deposit_limit_increase"
+          ],
+          "reason_codes": [
+            "LIMIT_RELAXATION_REQUEST"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-RG-LIMIT-CHANGE"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "id": "ACCOUNT_TAKEOVER_ACTIVE",
+      "order": 70,
+      "phase": "pre_model",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Safety",
+      "enabled": true,
+      "match": {
+        "field": "combined_text",
+        "regex_any": [
+          "(?i)\\b(?:someone|unknown person).{0,40}(?:logged in|accessed|changed|withdrew|withdrawing)\\b",
+          "(?i)\\b(?:account hacked|account takeover|unauthori[sz]ed login|not my withdrawal)\\b"
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Fraud & Compliance",
+          "intent": "account_takeover_report",
+          "priority": "critical",
+          "route": "specialist",
+          "assigned_team": "Fraud & Account Security",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "active_compromise",
+          "auto_response_policy": "prohibited",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "active_account_takeover"
+          ],
+          "reason_codes": [
+            "ACCOUNT_TAKEOVER_ACTIVE"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP6-ON-03",
+        "STEP6-ON-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "PROMPT_INJECTION_UNTRUSTED_INPUT",
+      "order": 80,
+      "phase": "pre_model",
+      "terminal": false,
+      "editability": "locked",
+      "ui_group": "Security",
+      "enabled": true,
+      "match": {
+        "flag": "prompt_injection_detected",
+        "equals": true
+      },
+      "effects": {
+        "set": {
+          "model_eligibility": "bypass_untrusted_input",
+          "model_bypass_reason": "prompt_injection_detected",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "prompt_injection_detected"
+          ],
+          "reason_codes": [
+            "PROMPT_INJECTION_DETECTED",
+            "MODEL_BYPASSED_UNTRUSTED_INPUT"
+          ],
+          "secondary_teams": [
+            "Platform Security"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP6-X-02",
+        "STEP7-F27",
+        "STEP8-NCSC-PROMPT-INJECTION"
+      ],
+      "control_classification": "official_guidance_and_conservative_control"
+    },
+    {
+      "id": "FORMAL_COMPLAINT",
+      "order": 90,
+      "phase": "post_semantic",
+      "terminal": true,
+      "editability": "guarded",
+      "ui_group": "Complaints",
+      "enabled": true,
+      "match": {
+        "any": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\bformal complaint\\b",
+              "(?i)\\b(?:file|raise|submit) a complaint\\b"
+            ]
+          },
+          {
+            "all": [
+              {
+                "flag": "repeat_contact",
+                "equals": true
+              },
+              {
+                "field": "combined_text",
+                "regex_any": [
+                  "(?i)\\b(?:agco|igo|regulator|ombudsman|adr|take this further|final notice)\\b"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "Complaints & Regulatory",
+          "intent": "formal_withdrawal_complaint",
+          "minimum_priority": "high",
+          "route": "specialist",
+          "assigned_team": "Complaints",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "formal_complaint"
+          ],
+          "reason_codes": [
+            "FORMAL_COMPLAINT"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP5-ON-01",
+        "STEP5-ON-06",
+        "STEP5-MT-03",
+        "STEP5-MT-04"
+      ],
+      "control_classification": "direct_requirement_and_conservative_control"
+    },
+    {
+      "id": "MARKETING_OPTOUT_ONLY",
+      "order": 100,
+      "phase": "post_semantic",
+      "terminal": true,
+      "editability": "guarded",
+      "ui_group": "General",
+      "enabled": true,
+      "match": {
+        "all": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:stop|unsubscribe|opt out).{0,50}(?:promo|marketing|emails?)\\b",
+              "(?i)\\b(?:promo|marketing) emails?.{0,80}\\b(?:stop sending|unsubscribe|opt out)\\b",
+              "(?i)\\bstop sending (?:them|emails?)\\b"
+            ]
+          },
+          {
+            "field": "combined_text",
+            "regex_none": [
+              "(?i)\\b(?:close|self[- ]exclude|cannot stop|gambling problem)\\b"
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "General",
+          "intent": "marketing_opt_out",
+          "priority": "low",
+          "route": "auto_respond",
+          "assigned_team": "CRM & Privacy",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "explicit_marketing_only_request",
+          "auto_response_policy": "allowed_template",
+          "auto_response_template_id": "ACK_MARKETING_OPTOUT",
+          "human_review_required": false
+        },
+        "add": {
+          "risk_flags": [
+            "marketing_opt_out",
+            "account_remains_active"
+          ],
+          "reason_codes": [
+            "MARKETING_OPTOUT_ONLY"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-MARKETING-OPTOUT-DISTINCTION"
+      ],
+      "control_classification": "conservative_prototype_control"
+    },
+    {
+      "id": "ACCOUNT_REOPEN_REASON_UNKNOWN",
+      "order": 110,
+      "phase": "post_semantic",
+      "terminal": true,
+      "editability": "locked",
+      "ui_group": "Responsible Gambling",
+      "enabled": true,
+      "match": {
+        "all": [
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:reopen|reactivate|start playing again)\\b"
+            ]
+          },
+          {
+            "field": "combined_text",
+            "regex_any": [
+              "(?i)\\b(?:closed|old account)\\b"
+            ]
+          }
+        ]
+      },
+      "effects": {
+        "set": {
+          "category": "General",
+          "intent": "account_reopen_review",
+          "priority": "high",
+          "route": "specialist",
+          "assigned_team": "Responsible Gambling",
+          "model_eligibility": "bypass_deterministic",
+          "model_bypass_reason": "account_reopen_reason_unknown",
+          "auto_response_policy": "acknowledgment_only",
+          "human_review_required": true
+        },
+        "add": {
+          "risk_flags": [
+            "prior_closure_reason_unknown",
+            "possible_self_exclusion",
+            "reopen_requested"
+          ],
+          "reason_codes": [
+            "ACCOUNT_REOPEN_REASON_UNKNOWN",
+            "RG_REOPEN_REVIEW"
+          ]
+        }
+      },
+      "policy_basis_ids": [
+        "STEP4-REOPEN-REVIEW"
+      ],
+      "control_classification": "conservative_prototype_control"
+    }
+  ],
+  "behaviour_fixtures": [
+    {
+      "id": "P01",
+      "message_id": "M07",
+      "must_match": [
+        "RG_LOSS_OF_CONTROL_CLOSURE"
+      ]
+    },
+    {
+      "id": "P02",
+      "message_id": "M11",
+      "must_match": [
+        "PCI_SENSITIVE_AUTH_DATA"
+      ],
+      "must_not_match": [
+        "THIRD_PARTY_PAYMENT_REPORTED"
+      ]
+    },
+    {
+      "id": "P03",
+      "message_id": "M15",
+      "must_match": [
+        "UNDERAGE_GAMBLING_REPORTED",
+        "THIRD_PARTY_PAYMENT_REPORTED"
+      ]
+    },
+    {
+      "id": "P04",
+      "message_id": "M18",
+      "must_match": [
+        "PROMPT_INJECTION_UNTRUSTED_INPUT"
+      ]
+    },
+    {
+      "id": "P05",
+      "message_id": "M23",
+      "must_match": [
+        "RG_EXPLICIT_SELF_EXCLUSION"
+      ]
+    },
+    {
+      "id": "P06",
+      "message_id": "M33",
+      "must_match": [
+        "MARKETING_OPTOUT_ONLY"
+      ]
+    },
+    {
+      "id": "P07",
+      "message_id": "M01",
+      "must_not_match": [
+        "THIRD_PARTY_PAYMENT_REPORTED",
+        "PCI_SENSITIVE_AUTH_DATA"
+      ]
+    },
+    {
+      "id": "P08",
+      "message_id": "M05",
+      "must_not_match": [
+        "THIRD_PARTY_PAYMENT_REPORTED"
+      ]
+    },
+    {
+      "id": "P09",
+      "message_id": "M04",
+      "must_not_match": [
+        "PCI_SENSITIVE_AUTH_DATA"
+      ]
+    }
+  ]
+}

@@ -36,6 +36,24 @@
     "semantic_constraints": {
       "normal_ui": "read_only",
       "advanced_mode": "code_change_only"
+    },
+    "derived_refinement_rules": {
+      "normal_ui": "form_editor_and_pattern_test",
+      "locked_behavior": "read_only",
+      "guarded_behavior": "editable_with_full_regression",
+      "editable_behavior": "editable",
+      "activation_gate": "all_hard_gates_pass",
+      "discoverable": true,
+      "rule_editability": {
+        "DERIVED_KYC_PENDING_WITH_FUNDS": "guarded",
+        "DERIVED_GAME_INTERRUPTION_REVIEW": "guarded",
+        "DERIVED_WITHDRAWAL_REPEAT_TEXT": "guarded",
+        "DERIVED_REGISTERED_CHANNEL_CHANGE": "guarded",
+        "DERIVED_INJECTION_WITHDRAWAL_BUSINESS": "guarded",
+        "DERIVED_REPEAT_WITHDRAWAL_ESCALATION": "guarded",
+        "DERIVED_SMALL_BALANCE_DISCREPANCY": "editable",
+        "DERIVED_DUPLICATE_CARD_CHARGE": "guarded"
+      }
     }
   },
   "workflow": [
