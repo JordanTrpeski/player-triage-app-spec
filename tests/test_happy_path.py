@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from player_triage.config import (
+    MODEL_CONFIGURATION_COMPONENT,
     EXPECTED_CONFIGURATION_VERSION,
     POLICY_COMPONENT_FILES,
     AppConfig,
@@ -17,9 +18,11 @@ from player_triage.config import (
 
 def test_load_all_components(app_root: Path) -> None:
     config = load_app_config(app_root)
-    # The 18 fixed components plus the manifest-declared derived-refinement
-    # component (present in policy-3.1.0).
-    assert set(config.components) == set(POLICY_COMPONENT_FILES) | {"derived_refinement_rules"}
+    # Fixed components plus the manifest-declared derived and model components.
+    assert set(config.components) == set(POLICY_COMPONENT_FILES) | {
+        "derived_refinement_rules",
+        MODEL_CONFIGURATION_COMPONENT,
+    }
     assert config.configuration_version == EXPECTED_CONFIGURATION_VERSION
     assert config.vocab.version == "3.0"
     for name in POLICY_COMPONENT_FILES:

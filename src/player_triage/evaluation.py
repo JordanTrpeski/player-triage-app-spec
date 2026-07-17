@@ -67,8 +67,13 @@ def load_ground_truth(config: AppConfig) -> dict[str, Mapping[str, Any]]:
     return truth
 
 
-def run_evaluation(config: AppConfig, input_path: Path | str | None = None) -> EvaluationReport:
-    engine = TriageEngine.from_config(config)
+def run_evaluation(
+    config: AppConfig,
+    input_path: Path | str | None = None,
+    *,
+    mode: str = "rules_only",
+) -> EvaluationReport:
+    engine = TriageEngine.from_config(config, mode=mode)
     truth = load_ground_truth(config)
     ingested = run_ingest(config, input_path=input_path)
 
@@ -96,6 +101,7 @@ def run_evaluation(config: AppConfig, input_path: Path | str | None = None) -> E
                 )
 
     report.gate_results = evaluate_gates(config, report.results_by_id)
+    engine.close()
     return report
 
 

@@ -47,6 +47,9 @@ _AUTO_RESPONSE_FORBIDDEN_FLAGS: Final[frozenset[str]] = frozenset(
         "formal_complaint",
         "cool_off_active",
         "redaction_uncertain",
+        "classification_uncertain",
+        "model_unavailable",
+        "schema_failure",
     }
 )
 

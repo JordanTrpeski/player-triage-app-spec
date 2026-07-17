@@ -8,16 +8,18 @@ functionality is implemented.
 
 from __future__ import annotations
 
+import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from .config import EXPECTED_CONFIGURATION_VERSION, load_app_config
-from .engine import TriageEngine
 from .errors import ConfigurationError
 from .evaluation import run_evaluation
+from .operational import append_human_override, run_operational_pipeline
 from .pipeline import ingest as run_ingest
 
 app = typer.Typer(
@@ -136,36 +138,101 @@ def run(
             resolve_path=True,
         ),
     ] = None,
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Phase 05 production mode; only rules_only is approved."),
+    ] = "rules_only",
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Output root. Defaults to output/ under the application root.",
+            exists=False,
+            file_okay=False,
+            dir_okay=True,
+            resolve_path=True,
+        ),
+    ] = None,
+    fail_fast: Annotated[
+        bool,
+        typer.Option("--fail-fast", help="Abort after the first isolated message failure."),
+    ] = False,
 ) -> None:
-    """Run the deterministic rules-only triage over the input dataset.
-
-    Output is sanitized: one line per message showing message_id, category,
-    priority, route, assigned team and the stage/rule decision path. It never
-    prints player identifiers, subject/body text, redacted text or detected
-    sensitive values.
-    """
+    """Run the Phase 05 rules-only pipeline and publish verified artifacts."""
 
     try:
         config = load_app_config(app_root)
-        engine = TriageEngine.from_config(config)
-        ingested = run_ingest(config, input_path=input_path)
+        result = run_operational_pipeline(
+            config,
+            input_path=input_path,
+            output_dir=output_dir,
+            mode=mode,
+            continue_safe=not fail_fast,
+        )
     except ConfigurationError as exc:
         raise _fail(exc.component, str(exc)) from exc
 
-    typer.echo(f"OK app_root: {config.app_root}")
-    typer.echo(f"OK mode: rules_only")
-    for message in ingested:
-        result = engine.classify(message)
-        decision = result.decision
-        typer.echo(
-            f"OK {decision['message_id']} category={decision['category']} "
-            f"intent={decision['intent']} priority={decision['priority']} "
-            f"route={decision['route']} team={decision['assigned_team']} "
-            f"model_called={decision['model_called']} "
-            f"status={decision['processing_status']} "
-            f"path=[{result.decision_path()}]"
+    typer.echo(f"OK run_id: {result.run_id}")
+    typer.echo(f"OK policy_version: {result.policy_version}")
+    typer.echo(f"OK mode: {mode}")
+    typer.echo(
+        f"OK counts: input={result.input_count} success={result.success_count} "
+        f"failure={result.failure_count} bypass={result.bypass_count}"
+    )
+    typer.echo(f"OK CSV: {result.artifacts.csv_path}")
+    typer.echo(f"OK JSONL: {result.artifacts.audit_path}")
+    typer.echo(f"OK SQLite: {result.artifacts.sqlite_path}")
+    for filename, digest in sorted(result.artifacts.digests.items()):
+        typer.echo(f"OK SHA256 {filename}: {digest}")
+    typer.echo(f"OK canonical_decision_sha256: {result.canonical_decision_digest}")
+    typer.echo(f"OK duration_ms: {result.duration_ms}")
+    typer.echo(f"RUN COMPLETE ({mode})")
+
+
+@app.command("override")
+def override(
+    run_dir: Annotated[
+        Path,
+        typer.Option(
+            "--run-dir",
+            help="Completed Phase 05 run directory.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            resolve_path=True,
+        ),
+    ],
+    message_id: Annotated[str, typer.Option("--message-id")],
+    reason_code: Annotated[str, typer.Option("--reason-code")],
+    after_decision: Annotated[
+        Path,
+        typer.Option(
+            "--after-decision",
+            help="Complete sanitized replacement decision JSON.",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            resolve_path=True,
+        ),
+    ],
+    app_root: AppRootOption = None,
+) -> None:
+    """Append a governed human-override event; never replace the original decision."""
+
+    try:
+        config = load_app_config(app_root)
+        event_id = append_human_override(
+            config,
+            run_dir=run_dir,
+            message_id=message_id,
+            reason_code=reason_code,
+            after_decision_path=after_decision,
         )
-    typer.echo("RUN COMPLETE (rules_only)")
+    except (ConfigurationError, json.JSONDecodeError) as exc:
+        component = exc.component if isinstance(exc, ConfigurationError) else "human_override"
+        raise _fail(component, "override failed closed") from exc
+    typer.echo(f"OK override_event_id: {event_id}")
+    typer.echo("OVERRIDE APPENDED")
 
 
 @app.command("evaluate")
@@ -182,6 +249,10 @@ def evaluate(
             resolve_path=True,
         ),
     ] = None,
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Evaluation mode: rules_only or local_model."),
+    ] = "rules_only",
 ) -> None:
     """Evaluate the rules-only baseline against the frozen ground truth.
 
@@ -192,7 +263,7 @@ def evaluate(
 
     try:
         config = load_app_config(app_root)
-        report = run_evaluation(config, input_path=input_path)
+        report = run_evaluation(config, input_path=input_path, mode=mode)
     except ConfigurationError as exc:
         raise _fail(exc.component, str(exc)) from exc
 
@@ -216,10 +287,85 @@ def evaluate(
         typer.echo(f"  {gate.gate_id} {status}: {gate.detail}")
 
     if report.all_gates_pass():
-        typer.echo("EVALUATE COMPLETE (all safety gates passed)")
+        if mode == "rules_only":
+            typer.echo("EVALUATE COMPLETE (all safety gates passed)")
+        else:
+            typer.echo(f"EVALUATE COMPLETE ({mode}; all safety gates passed)")
     else:
         typer.echo("EVALUATE COMPLETE (safety gate failure)")
         raise typer.Exit(code=1)
+
+
+@app.command("evaluate-semantic")
+def evaluate_semantic(
+    app_root: AppRootOption = None,
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Evaluation mode: both, rules_only, or local_model."),
+    ] = "both",
+    records: Annotated[
+        bool,
+        typer.Option("--records", help="Print sanitized per-case evidence records."),
+    ] = False,
+) -> None:
+    """Compare rules-only and local-model modes on the frozen synthetic holdout."""
+
+    from .semantic_evaluation import (
+        SEMANTIC_FIELDS,
+        SemanticModeReport,
+        load_semantic_holdout,
+        run_semantic_comparison,
+        run_semantic_mode,
+    )
+
+    try:
+        config = load_app_config(app_root)
+        reports: tuple[SemanticModeReport, ...]
+        if mode == "both":
+            comparison = run_semantic_comparison(config)
+            holdout_version = comparison.holdout_version
+            holdout_sha256 = comparison.holdout_sha256
+            reports = (comparison.rules_only, comparison.local_model)
+        elif mode in {"rules_only", "local_model"}:
+            holdout_version, _cases, holdout_sha256 = load_semantic_holdout(config)
+            reports = (run_semantic_mode(config, mode=mode),)
+        else:
+            raise ValueError("mode must be both, rules_only, or local_model")
+    except ConfigurationError as exc:
+        raise _fail(exc.component, str(exc)) from exc
+    except ValueError as exc:
+        raise _fail("evaluate-semantic", str(exc)) from exc
+
+    typer.echo(f"OK holdout: {holdout_version}")
+    typer.echo(f"OK holdout_sha256: {holdout_sha256}")
+    for report in reports:
+        typer.echo(f"MODE {report.mode}: total={report.total}")
+        for field_name in SEMANTIC_FIELDS:
+            typer.echo(
+                f"  agreement {field_name}: {report.agreement[field_name]}/{report.total}"
+            )
+        typer.echo(
+            f"  fallback={report.fallback_count} schema_failure={report.schema_failure_count} "
+            f"malformed={report.malformed_output_count} retries={report.retry_count} "
+            f"unsafe_auto_response={report.unsafe_auto_response_count} "
+            f"safety_regression={report.safety_regression_count} "
+            f"model_calls={report.model_call_count} bypass={report.bypass_count}"
+        )
+        typer.echo(
+            f"  median_ms={report.median_latency_ms:.1f} p95_ms={report.p95_latency_ms:.1f} "
+            f"load_ms={report.load_time_ms:.1f} memory_delta_mb={report.memory_delta_mb}"
+        )
+        if records:
+            for case_id in sorted(report.case_records):
+                typer.echo(
+                    "CASE "
+                    + json.dumps(
+                        asdict(report.case_records[case_id]),
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                    )
+                )
+    typer.echo("SEMANTIC EVALUATION COMPLETE")
 
 
 @app.command("demo")

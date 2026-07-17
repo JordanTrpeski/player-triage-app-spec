@@ -17,6 +17,7 @@ from jsonschema import Draft202012Validator
 
 from player_triage.config import (
     DERIVED_REFINEMENT_COMPONENT,
+    EXPECTED_CONFIGURATION_VERSION,
     load_app_config,
 )
 from player_triage.engine import TriageEngine
@@ -37,10 +38,10 @@ def test_component_is_loaded_and_versioned(app_root: Path) -> None:
     assert config.has_component(DERIVED_REFINEMENT_COMPONENT)
     component = config.component(DERIVED_REFINEMENT_COMPONENT)
     # The derived component file is unchanged since 03C (internal version 3.1.0);
-    # the active policy bundle is 3.2.0 after the 03D detector-hardening changes.
+    # the active policy bundle may advance while retaining this governed component.
     assert component["version"] == "3.1.0"
     assert len(component["rules"]) == 8
-    assert config.bundle_version == "policy-3.2.0"
+    assert config.bundle_version == EXPECTED_CONFIGURATION_VERSION
     assert config.component_digest(DERIVED_REFINEMENT_COMPONENT)
 
 
@@ -138,7 +139,7 @@ def _rollback_root(mutated_app_root: Callable[[], Path]) -> Path:
 
 def test_activation_has_component(app_root: Path) -> None:
     config = load_app_config(app_root)
-    assert config.bundle_version == "policy-3.2.0"
+    assert config.bundle_version == EXPECTED_CONFIGURATION_VERSION
     assert config.has_component(DERIVED_REFINEMENT_COMPONENT)
 
 
@@ -184,8 +185,8 @@ def test_decision_audit_event_records_provenance(app_root: Path) -> None:
     event = engine.build_decision_audit_event(result)
     assert list(validator.iter_errors(event)) == []
     prov = event["payload"]["component_provenance"]
-    assert prov["policy_bundle_version"] == "policy-3.2.0"
+    assert prov["policy_bundle_version"] == EXPECTED_CONFIGURATION_VERSION
     assert prov["derived_refinement_version"] == "3.1.0"
     assert prov["derived_refinement_digest"] == config.component_digest(DERIVED_REFINEMENT_COMPONENT)
     assert "DERIVED_DUPLICATE_CARD_CHARGE" in prov["derived_rules_triggered"]
-    assert event["configuration_version"] == "policy-3.2.0"
+    assert event["configuration_version"] == EXPECTED_CONFIGURATION_VERSION

@@ -1,12 +1,16 @@
 {
-  "version": "3.0",
+  "version": "3.0.1",
   "components": {
     "policy_rules": {
       "normal_ui": "form_editor",
       "locked_behavior": "read_only",
       "guarded_behavior": "editable_with_full_regression",
       "editable_behavior": "editable",
-      "activation_gate": "all_hard_gates_pass"
+      "activation_gate": "all_hard_gates_and_multilingual_no_call_regression_pass",
+      "discoverable": true,
+      "rule_editability": {
+        "RG_EXPLICIT_SELF_EXCLUSION": "locked"
+      }
     },
     "baseline_intent_rules": {
       "normal_ui": "form_editor_and_pattern_test",

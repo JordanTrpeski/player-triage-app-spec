@@ -1,0 +1,22 @@
+{
+  "version_id": "policy-3.3.0",
+  "parent_version_id": "policy-3.2.0",
+  "status": "active",
+  "created_at": "2026-07-16T00:00:00Z",
+  "created_by": "phase-04-local-model-adapter",
+  "change_reason": "Phase 04: add an optional, local-only semantic model configuration with pinned artifact/runtime/prompt integrity, strict safety gating, and rollback to the rules-only policy-3.2.0 bundle.",
+  "components": {
+    "policy_rules": "1df7abc807638614825aa58470d2fb62a6e50ef5e629f8417ea334f8f364228c",
+    "baseline_intent_rules": "bec1e6382f0dfe855ade73cf8f8c9bccc54834ba198158876d846e5e58bec95b",
+    "redaction_policy": "a26042459a4ff56b02e9e59ea1bdf6633b39dcb1a6ac60c0287d17d6c7ab3864",
+    "market_overlays": "8c602c5a6461eded53e262790508f3fced2414ac4627fcaf8e851331b53196c6",
+    "auto_response_templates": "e7d5da60a6c7b02b33de5605e94b4465265981a2b2ce8816191775c6aeb64304",
+    "rationale_templates": "223f07aad502f20633335b6c8b2675af7163f0651fea7d4caf33f83e04aee1a7",
+    "semantic_constraints": "ee8fb892ea909755159099a49c47c01b0c827bdd2aceffabbb8634fea6317867",
+    "derived_refinement_rules": "e0c6ec083aa0fd914b78b02bb72a407e8baffb0b727b485bf76d604aee5c11c4",
+    "model_configuration": "a5fc86cd6df75f6a58634ed3e9b016dbe986f01b26ef873be8445726d08fd21e"
+  },
+  "validation_summary": null,
+  "impact_summary": null,
+  "activation_event_id": null
+}

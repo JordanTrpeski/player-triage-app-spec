@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "approved_model_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF:q4_k_m",
+  "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+  "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+  "local_path_reference": {
+    "environment_variable": "PLAYER_TRIAGE_MODEL_PATH",
+    "default_scope": "user_model_directory",
+    "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+  },
+  "runtime": "llama-cpp-python",
+  "runtime_version": "0.3.34",
+  "context_limit": 2048,
+  "output_token_limit": 256,
+  "timeout_seconds": 30,
+  "generation": {
+    "temperature": 0,
+    "max_schema_retries": 1,
+    "constrained_json": true
+  },
+  "prompt_version": "classifier-prompt-1.0.0",
+  "prompt_sha256": "30a19f73a0e36e95c34066b738379c784da5864ad5b2d84f0f202cc180a8caef",
+  "allowed_languages": ["en", "de", "es", "hi"],
+  "approval_status": "evaluation_only"
+}

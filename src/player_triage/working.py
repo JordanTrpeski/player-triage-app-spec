@@ -18,6 +18,7 @@ from typing import Final, Literal
 Stage = Literal[
     "pre_model_safety",
     "baseline_semantic",
+    "model_semantic",
     "aggregation",
     "derived_refinement",
     "final_policy",

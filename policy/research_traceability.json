@@ -1,5 +1,5 @@
 {
-  "version": "3.0",
+  "version": "3.0.1",
   "sources": [
     {
       "id": "STEP3",
@@ -54,7 +54,12 @@
       "policy_basis_ids": [
         "STEP4-RG-EXPLICIT-SE"
       ],
-      "control_classification": "direct_requirement_and_conservative_control"
+      "control_classification": "direct_requirement_and_conservative_control",
+      "source_or_finding": "Phase 04 independent multilingual no-call challenge",
+      "affected_output_fields": ["category", "intent", "priority", "route", "assigned_team", "model_eligibility", "model_bypass_reason", "human_review_required", "risk_flags", "reason_codes"],
+      "rationale": "Explicit German activation requests are safety-terminal before any optional model call; negated, quoted and informational mentions remain excluded unless an independent harm rule fires.",
+      "owner": "Responsible Gambling",
+      "review_requirement": "all_hard_gates_and_multilingual_no_call_regression_before_activation"
     },
     {
       "rule_id": "RG_LOSS_OF_CONTROL_CLOSURE",
@@ -210,6 +215,14 @@
   ],
   "note": "Operational outputs record reason codes. Full legal citations remain in the research transcript and decision log; the prototype does not claim compliance. Derived-refinement routing choices are recorded as operational routing decisions or official guidance, never as direct legal requirements.",
   "change_log": [
+    {
+      "bundle_version": "policy-3.3.1",
+      "phase": "04",
+      "summary": "Expanded the locked RG_EXPLICIT_SELF_EXCLUSION rule with generic German account-block, immediate-exclusion, never-gamble-again and permanent-ban phrasings plus German negation, informational, attributed and quoted guards.",
+      "control_classification": "direct_requirement_and_conservative_control",
+      "affected_rules_or_detectors": ["RG_EXPLICIT_SELF_EXCLUSION"],
+      "note": "Corrects the preserved policy-3.3.0 independent-holdout false negative. No message id or raw-body equality is used; independent harm rules remain additive and are not suppressed."
+    },
     {
       "bundle_version": "policy-3.2.0",
       "phase": "03D",

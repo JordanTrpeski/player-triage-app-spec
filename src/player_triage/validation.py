@@ -59,7 +59,13 @@ class SemanticValidator:
             return True
         return value in self.vocab.get(catalogue, frozenset())
 
-    def validate(self, decision: Mapping[str, Any], ctx: SignalContext) -> list[Violation]:
+    def validate(
+        self,
+        decision: Mapping[str, Any],
+        ctx: SignalContext,
+        *,
+        model_mode: str = "rules_only",
+    ) -> list[Violation]:
         violations: list[Violation] = []
         route = decision.get("route")
         priority = decision.get("priority")
@@ -81,9 +87,14 @@ class SemanticValidator:
         # 4) critical without specialist routing / human review.
         if priority == "critical" and (route != "specialist" or not human_review):
             violations.append(Violation("CRITICAL_WITHOUT_SPECIALIST", "critical must be specialist + human review"))
-        # 5) model called in rules-only mode.
-        if decision.get("model_called") is True:
+        # 5) a model call is valid only in explicitly enabled local-model mode
+        # and only for a final eligible decision.
+        if decision.get("model_called") is True and model_mode != "local_model":
             violations.append(Violation("MODEL_CALLED_IN_RULES_ONLY", "model_called must be false"))
+        if decision.get("model_called") is True and eligibility != self.const.eligible:
+            violations.append(
+                Violation("MODEL_CALLED_WHILE_BYPASSED", "model call requires eligible state")
+            )
         # 6) bypass eligibility without a bypass reason.
         if isinstance(eligibility, str) and eligibility.startswith("bypass_") and not bypass_reason:
             violations.append(Violation("BYPASS_WITHOUT_REASON", "bypass eligibility requires a reason"))

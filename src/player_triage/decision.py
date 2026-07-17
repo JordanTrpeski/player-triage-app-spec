@@ -23,6 +23,7 @@ def assemble_decision(
     market_applicability_note: str | None,
     short_rationale: str,
     processing_status: str = "classified",
+    model_called: bool = False,
 ) -> dict[str, Any]:
     """Build the output-schema dict for a fully-resolved decision."""
 
@@ -53,7 +54,7 @@ def assemble_decision(
         "risk_flags": list(decision.risk_flags),
         "reason_codes": list(decision.reason_codes),
         "model_eligibility": decision.model_eligibility,
-        "model_called": False,
+        "model_called": model_called,
         "model_bypass_reason": decision.model_bypass_reason,
         "decision_basis": decision.decision_basis,
         "market_framework_status": message.market_framework_status or "established",
@@ -100,6 +101,11 @@ def manual_fallback_decision(
     reason: str,
     short_rationale: str,
     market_applicability_note: str | None,
+    model_eligibility: str = "eligible",
+    model_bypass_reason: str | None = None,
+    model_called: bool = False,
+    preserved_risk_flags: tuple[str, ...] = (),
+    preserved_reason_codes: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build a schema-valid provisional fallback when no safe classification exists."""
 
@@ -121,11 +127,11 @@ def manual_fallback_decision(
         "auto_response_policy": const.acknowledgment_only,
         "auto_response_template_id": None,
         "human_review_required": True,
-        "risk_flags": ["classification_uncertain"],
-        "reason_codes": [reason],
-        "model_eligibility": "eligible",
-        "model_called": False,
-        "model_bypass_reason": None,
+        "risk_flags": list(dict.fromkeys((*preserved_risk_flags, "classification_uncertain"))),
+        "reason_codes": list(dict.fromkeys((*preserved_reason_codes, reason))),
+        "model_eligibility": model_eligibility,
+        "model_called": model_called,
+        "model_bypass_reason": model_bypass_reason,
         "decision_basis": "manual_fallback",
         "market_framework_status": message.market_framework_status or "established",
         "market_overlay_codes": list(message.market_overlay_codes),

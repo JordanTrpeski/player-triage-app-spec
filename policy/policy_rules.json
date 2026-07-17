@@ -1,5 +1,5 @@
 {
-  "version": "3.0",
+  "version": "3.0.1",
   "rule_dsl_version": "3.0",
   "rules": [
     {
@@ -122,7 +122,14 @@
               "(?i)dauerhaft[^.?!]{0,40}(?:selbst[^.?!]{0,15}aus|ausschlie|konto[^.?!]{0,15}schlie)",
               "(?i)\\bselbst[^.?!]{0,15}ausschlie",
               "(?i)\\bschlie(?:ss|\u00df)en?[^.?!]{0,30}\\bselbst[^.?!]{0,10}\\baus\\b",
-              "(?i)konto[^.?!]{0,30}(?:endg(?:u|\u00fc)ltig|dauerhaft)[^.?!]{0,20}schlie"
+              "(?i)konto[^.?!]{0,30}(?:endg(?:u|\u00fc)ltig|dauerhaft)[^.?!]{0,20}(?:schlie|sperr)",
+              "(?i)(?:sperr|schlie(?:ss|\u00df))[^.?!]{0,25}(?:mich|mein konto)[^.?!]{0,35}(?:dauerhaft|permanent|sofort)[^.?!]{0,25}(?:aus|gl\u00fccksspiel|spielen|wetten)",
+              "(?i)(?:dauerhaft|permanent)[^.?!]{0,35}(?:selbstsperr|gl\u00fccksspiel[^.?!]{0,10}sperr|konto[^.?!]{0,15}sperr)",
+              "(?i)\\b(?:nie|niemals)\\b[^.?!]{0,20}\\bwieder\\b[^.?!]{0,25}(?:spielen|wetten|gl\u00fccksspiel)[^.?!]{0,25}(?:hier|k\u00f6nnen|d\u00fcrfen|m\u00f6chten|wollen)?",
+              "(?i)(?:schlie(?:ss|\u00df)(?:en)?|sperr(?:en)?)[^.?!]{0,20}(?:sie )?mich[^.?!]{0,20}(?:sofort|unverz\u00fcglich)?[^.?!]{0,10}aus",
+              "(?i)sperr(?:en)?[^.?!]{0,30}(?:mein )?konto[^.?!]{0,30}(?:dauerhaft|permanent)",
+              "(?i)(?:permanent|dauerhaft)[^.?!]{0,25}(?:gl\u00fccksspiel)?sperre",
+              "(?i)\\bselbstsperre\\b"
             ]
           },
           {
@@ -136,7 +143,10 @@
               "(?i)\\b(?:agent|friend|someone|somebody|colleague|advisor|representative|support)\\b[^.?!]{0,25}\\b(?:wrote|said|told|mentioned|suggested|advised|typed|put)\\b[^.?!]{0,25}(?:self[- ]?exclu|exclude|close)",
               "(?i)[\u2018\u2019\u201c\u201d]\\s*self[- ]?exclu",
               "(?i)\\b(?:nicht|niemals|auf keinen fall)\\b[^.?!]{0,30}(?:selbst|ausschlie|schlie(?:ss|\u00df)en)",
-              "(?i)\\bwie\\b[^.?!]{0,30}(?:selbst.{0,10}ausschlie|ausschlie)",
+              "(?i)\\b(?:nicht|kein(?:e|en|er|es)?)\\b[^.?!]{0,35}(?:selbstsperr|gl\u00fccksspiel[^.?!]{0,10}sperr|permanent[^.?!]{0,10}sperr)",
+              "(?i)\\b(?:wie|was|wann|warum)\\b[^.?!]{0,35}(?:selbst.{0,10}(?:ausschlie|ausschluss)|selbstausschluss|selbstsperr|gl\u00fccksspielsperr)",
+              "(?i)\\b(?:mitarbeiter|berater|support|agent|freund|freundin|bekannter)\\b[^.?!]{0,35}(?:sagte|schrieb|erw\u00e4hnte|meinte|riet|empfahl|teilte)[^.?!]{0,40}(?:selbst.{0,10}(?:ausschlie|ausschluss)|selbstsperr|gl\u00fccksspielsperr)",
+              "(?i)[\u2018\u2019\u201a\u201b\u201c\u201d\u201e\u201f\u00ab\u00bb\\\"]\\s*(?:selbstausschluss|selbstsperre|gl\u00fccksspielsperre)",
               "(?i)\\bno\\b\\s+(?:quiero|deseo|pienso|voy a)\\b[^.?!]{0,20}(?:autoexcl|excluir)"
             ]
           }

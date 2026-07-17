@@ -45,7 +45,7 @@ from .paths import policy_dir, resolve_app_root
 from .schema import SchemaRegistry, build_schema_registry
 
 
-EXPECTED_CONFIGURATION_VERSION: Final[str] = "policy-3.2.0"
+EXPECTED_CONFIGURATION_VERSION: Final[str] = "policy-3.3.1"
 
 # Manifest-declared optional policy component (introduced in policy-3.1.0). It is
 # loaded, schema-validated and hash-verified only when the active manifest lists
@@ -53,6 +53,11 @@ EXPECTED_CONFIGURATION_VERSION: Final[str] = "policy-3.2.0"
 # derived-refinement rules, restoring the earlier behaviour.
 DERIVED_REFINEMENT_COMPONENT: Final[str] = "derived_refinement_rules"
 DERIVED_REFINEMENT_SCHEMA: Final[str] = "derived_refinement_rules_schema.json"
+
+# Optional Phase 04 local-model configuration. Older rollback bundles omit the
+# component and remain valid rules-only configurations.
+MODEL_CONFIGURATION_COMPONENT: Final[str] = "model_configuration"
+MODEL_CONFIGURATION_SCHEMA: Final[str] = "model_configuration_schema.json"
 
 # Component name → filename under ``policy/``. This is the ONLY place in source
 # where these filenames live. Every downstream consumer reaches component data
@@ -365,6 +370,39 @@ def _load_manifest_declared_component(
     components[component_name] = raw
 
 
+def _verify_manifest_declared_fixed_components(
+    directory: Path,
+    manifest: "ConfigurationManifest",
+) -> None:
+    """Hash-verify fixed components for bundles opting into full provenance.
+
+    Policy-3.3.1 is the first bundle to declare the traceability/UI digests and
+    therefore opts into this stricter check. Older archived manifests retain
+    their historical loader behavior for reproducible rollback tests.
+    """
+
+    if "research_traceability" not in manifest.components:
+        return
+    for component_name, expected_digest in manifest.components.items():
+        filename = POLICY_COMPONENT_FILES.get(component_name)
+        if filename is None or component_name == "configuration_manifest":
+            continue
+        path = directory / filename
+        if not path.is_file():
+            raise MissingConfigurationError(
+                component=component_name,
+                message="manifest-declared policy component is missing",
+                path=path,
+            )
+        actual_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_digest != expected_digest:
+            raise HashIntegrityError(
+                component=component_name,
+                message="on-disk digest does not match the configuration manifest",
+                path=path,
+            )
+
+
 def load_app_config(
     app_root: Path | str | None = None,
     *,
@@ -418,6 +456,8 @@ def load_app_config(
             ),
         )
 
+    _verify_manifest_declared_fixed_components(directory, manifest)
+
     try:
         vocab = ControlledVocabularies.model_validate(components["controlled_vocabularies"])
     except Exception as exc:
@@ -436,6 +476,14 @@ def load_app_config(
         schema_registry,
         component_name=DERIVED_REFINEMENT_COMPONENT,
         schema_filename=DERIVED_REFINEMENT_SCHEMA,
+    )
+    _load_manifest_declared_component(
+        directory,
+        manifest,
+        components,
+        schema_registry,
+        component_name=MODEL_CONFIGURATION_COMPONENT,
+        schema_filename=MODEL_CONFIGURATION_SCHEMA,
     )
 
     return AppConfig(

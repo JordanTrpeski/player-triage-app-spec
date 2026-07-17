@@ -19,13 +19,27 @@ a manual fallback that is still schema- and semantic-valid.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from .baseline_classifier import BaselineClassifier, BaselineOutcome
 from .config import DERIVED_REFINEMENT_COMPONENT, AppConfig
 from .decision import assemble_decision, manual_fallback_decision
 from .derived_rules import DerivedRuleEngine
 from .final_policy import FinalPolicy
+from .model import (
+    DisabledSemanticClassifier,
+    ModelCallGate,
+    RulesOnlySemanticClassifier,
+    SemanticClassifier,
+)
+from .model.orchestration import (
+    ModelAuditBuilder,
+    ModelCandidateAggregator,
+    ModelDecisionTrace,
+    ModelInvocationCoordinator,
+    ModelTraceBuilder,
+    normalise_fallback,
+)
 from .records import IngestedMessage
 from .rule_engine import RuleEngine
 from .signals import SignalContext, build_signals
@@ -46,6 +60,7 @@ class ClassificationResult:
     refinement_ids: tuple[str, ...]
     schema_valid: bool
     semantic_violations: tuple[Violation, ...]
+    model_trace: "ModelDecisionTrace"
 
     @property
     def message_id(self) -> str:
@@ -68,9 +83,38 @@ class TriageEngine:
     derived_engine: DerivedRuleEngine
     final_policy: FinalPolicy
     semantic_validator: SemanticValidator
+    semantic_classifier: SemanticClassifier
+    model_gate: ModelCallGate
+    model_invoker: ModelInvocationCoordinator
+    model_aggregator: ModelCandidateAggregator
 
     @classmethod
-    def from_config(cls, config: AppConfig) -> "TriageEngine":
+    def from_config(
+        cls,
+        config: AppConfig,
+        *,
+        mode: str = "rules_only",
+        semantic_classifier: SemanticClassifier | None = None,
+        kill_switch: bool = False,
+    ) -> "TriageEngine":
+        if mode not in {"rules_only", "local_model"}:
+            raise ValueError("mode must be rules_only or local_model")
+        provider: SemanticClassifier
+        if semantic_classifier is None:
+            if mode == "rules_only":
+                provider = cast(SemanticClassifier, RulesOnlySemanticClassifier())
+            else:
+                from .model.configuration import build_local_classifier
+
+                provider = cast(SemanticClassifier, build_local_classifier(config))
+        else:
+            provider = semantic_classifier
+        final_policy = FinalPolicy.from_config(
+            config.component("auto_response_templates"),
+            config.component("baseline_intent_rules"),
+            config.component("rationale_templates"),
+        )
+        gate = ModelCallGate(mode=mode, kill_switch=kill_switch)
         return cls(
             config=config,
             rule_engine=RuleEngine.from_policy(config.component("policy_rules")),
@@ -80,12 +124,17 @@ class TriageEngine:
                 if config.has_component(DERIVED_REFINEMENT_COMPONENT)
                 else DerivedRuleEngine.empty()
             ),
-            final_policy=FinalPolicy.from_config(
-                config.component("auto_response_templates"),
-                config.component("baseline_intent_rules"),
-                config.component("rationale_templates"),
-            ),
+            final_policy=final_policy,
             semantic_validator=SemanticValidator.from_config(config),
+            semantic_classifier=provider,
+            model_gate=gate,
+            model_invoker=ModelInvocationCoordinator(
+                gate=gate,
+                provider=provider,
+                categories=tuple(config.vocab.categories),
+                intents=tuple(config.vocab.intents),
+            ),
+            model_aggregator=ModelCandidateAggregator(final_policy.const),
         )
 
     # -- governance provenance ---------------------------------------------
@@ -102,6 +151,13 @@ class TriageEngine:
     @property
     def derived_component_digest(self) -> str | None:
         return self.config.component_digest(DERIVED_REFINEMENT_COMPONENT)
+
+    def close(self) -> None:
+        """Release an optional isolated model worker; rules-only is a no-op."""
+
+        close = getattr(self.semantic_classifier, "close", None)
+        if callable(close):
+            close()
 
     def build_decision_audit_event(
         self, result: ClassificationResult, *, run_id: str = "run", processing_time_ms: int = 1
@@ -146,8 +202,10 @@ class TriageEngine:
                 "controls": {
                     "schema_valid": result.schema_valid,
                     "semantic_valid": not result.semantic_violations,
-                    "policy_override_applied": bool(result.matched_derived),
-                    "fallback_reason": None,
+                    "policy_override_applied": bool(
+                        result.matched_derived or result.model_trace.deterministic_overrides
+                    ),
+                    "fallback_reason": result.model_trace.fallback_reason,
                 },
                 "processing_time_ms": processing_time_ms,
                 "component_provenance": {
@@ -159,12 +217,28 @@ class TriageEngine:
             },
         }
 
+    def build_model_failure_audit_event(
+        self,
+        result: ClassificationResult,
+        *,
+        run_id: str = "run",
+    ) -> dict[str, Any] | None:
+        """Return a schema-valid, metadata-only model fallback event if needed."""
+
+        return ModelAuditBuilder.failure_event(
+            result.decision,
+            result.model_trace,
+            bundle_version=self.bundle_version,
+            run_id=run_id,
+        )
+
     def classify(self, message: IngestedMessage) -> ClassificationResult:
         ctx = build_signals(message)
         decision = WorkingDecision(msg_id=message.msg_id)
 
         # Stage a — pre-model safety.
         matched_pre = self.rule_engine.evaluate_pre_model(decision, ctx)
+        self._apply_ingestion_eligibility(decision, ctx)
 
         # Stage b — rules-only semantic candidate.
         baseline = self.classifier.classify(ctx)
@@ -172,10 +246,29 @@ class TriageEngine:
         # Stage c — aggregation and precedence.
         self._aggregate(decision, baseline)
 
-        # Stage a' — post-semantic deterministic rules (complaint/marketing/reopen).
+        # Deterministic post-semantic rules depend only on the rules candidate
+        # and redacted context. Evaluate them before constructing any model
+        # request so deterministic terminal outcomes are true no-call paths.
         matched_post = self.rule_engine.evaluate_post_semantic(decision, ctx)
         self._demote_overridden_intent(decision, baseline)
         self._add_reference_flags(decision, ctx)
+
+        # Stage b' - optional model semantic candidate. The request cannot be
+        # constructed unless every deterministic safety-gate condition passes.
+        rules_candidate = ModelTraceBuilder.rules_candidate(baseline)
+        invocation = self.model_invoker.invoke(message, ctx, decision, baseline)
+        model_result = invocation.result
+        model_candidate = invocation.candidate
+        model_fallback_engaged = False
+        if model_candidate is not None:
+            if model_candidate.ambiguity == "clear":
+                self.model_aggregator.apply(decision, baseline, model_candidate)
+            else:
+                self.model_aggregator.mark_fallback(decision, "NO_CLASSIFICATION_CANDIDATE")
+                model_fallback_engaged = True
+        elif model_result is not None:
+            self.model_aggregator.mark_fallback(decision, normalise_fallback(model_result))
+            model_fallback_engaged = True
 
         # Stage b' — generic deterministic derived refinements (application layer).
         matched_derived = self.derived_engine.apply(decision, ctx)
@@ -195,6 +288,7 @@ class TriageEngine:
             decision.add_values("risk_flags", ["classification_uncertain"], stage="manual_fallback")
             decision.add_values("reason_codes", ["UNCLASSIFIED_MANUAL_REVIEW"], stage="manual_fallback")
             decision.decision_basis = "manual_fallback"
+        fallback_engaged = fallback_engaged or model_fallback_engaged
 
         # Stage d — final policy.
         self.final_policy.apply_routing(decision, ctx)
@@ -210,12 +304,23 @@ class TriageEngine:
             market_applicability_note=note,
             short_rationale=rationale,
             processing_status="provisional_fallback" if fallback_engaged else "classified",
+            model_called=bool(model_result and model_result.called),
+        )
+
+        model_trace = ModelTraceBuilder.build(
+            mode=self.model_gate.mode,
+            provider_name=self.semantic_classifier.name,
+            rules_candidate=rules_candidate,
+            invocation=invocation,
+            final_decision=decision_dict,
         )
 
         # Stage g — JSON Schema validation.
         schema_errors = self._schema_errors(decision_dict)
         # Stage h — semantic validation.
-        violations = self.semantic_validator.validate(decision_dict, ctx)
+        violations = self.semantic_validator.validate(
+            decision_dict, ctx, model_mode=self.model_gate.mode
+        )
 
         if schema_errors or violations:
             return self._fallback(
@@ -229,6 +334,7 @@ class TriageEngine:
                 "UNCLASSIFIED_MANUAL_REVIEW",
                 schema_valid=not schema_errors,
                 violations=violations,
+                model_trace=model_trace,
             )
 
         return ClassificationResult(
@@ -241,6 +347,7 @@ class TriageEngine:
             refinement_ids=tuple(baseline.refinement_ids),
             schema_valid=True,
             semantic_violations=(),
+            model_trace=model_trace,
         )
 
     # -- helpers ------------------------------------------------------------
@@ -268,6 +375,54 @@ class TriageEngine:
         decision.add_values("reason_codes", baseline.reason_codes, stage="baseline_semantic")
         decision.add_values("secondary_teams", baseline.secondary_teams, stage="baseline_semantic")
         decision.add_values("secondary_intents", baseline.secondary_intents, stage="baseline_semantic")
+
+    def _apply_ingestion_eligibility(
+        self, decision: WorkingDecision, ctx: SignalContext
+    ) -> None:
+        """Preserve ingestion bypasses even if no policy rule matched them."""
+
+        state = ctx.ingestion_eligibility_state
+        if state == "eligible" or decision.model_eligibility is not None:
+            return
+        if state == "bypass_sensitive":
+            decision.set_scalar("model_eligibility", state, stage="pre_model_safety")
+            decision.set_scalar(
+                "model_bypass_reason",
+                ctx.ingestion_eligibility_reason
+                or "sensitive_payment_or_authentication_data",
+                stage="pre_model_safety",
+            )
+        elif state == "bypass_attachment":
+            decision.set_scalar("model_eligibility", state, stage="pre_model_safety")
+            decision.set_scalar(
+                "model_bypass_reason",
+                ctx.ingestion_eligibility_reason or "attachment_received_body_insufficient",
+                stage="pre_model_safety",
+            )
+        elif state == "bypass_untrusted_input":
+            decision.set_scalar("model_eligibility", state, stage="pre_model_safety")
+            decision.set_scalar(
+                "model_bypass_reason",
+                ctx.ingestion_eligibility_reason or "prompt_injection_detected",
+                stage="pre_model_safety",
+            )
+            decision.add_values(
+                "risk_flags", ["prompt_injection_detected"], stage="pre_model_safety"
+            )
+        elif state in {"redaction_uncertain", "invalid_input"}:
+            # The output vocabulary has no direct invalid/uncertain eligibility
+            # value. Use the conservative sensitive bypass with the approved
+            # redaction-uncertain reason; the gate record retains the exact cause.
+            decision.set_scalar("model_eligibility", "bypass_sensitive", stage="pre_model_safety")
+            decision.set_scalar(
+                "model_bypass_reason", "redaction_uncertain", stage="pre_model_safety"
+            )
+            decision.add_values(
+                "risk_flags", ["redaction_uncertain"], stage="pre_model_safety"
+            )
+            decision.add_values(
+                "reason_codes", ["REDACTION_UNCERTAIN"], stage="pre_model_safety"
+            )
 
     def _add_reference_flags(self, decision: WorkingDecision, ctx: SignalContext) -> None:
         """Surface attachment/passport reference detections as risk flags."""
@@ -309,6 +464,7 @@ class TriageEngine:
         *,
         schema_valid: bool = True,
         violations: list[Violation] | None = None,
+        model_trace: ModelDecisionTrace,
     ) -> ClassificationResult:
         note = self.final_policy.apply_overlay(decision, ctx)
         rationale = self.final_policy.rationale_templates.get(
@@ -319,6 +475,11 @@ class TriageEngine:
             reason=reason,
             short_rationale=rationale,
             market_applicability_note=note,
+            model_eligibility=decision.model_eligibility or "eligible",
+            model_bypass_reason=decision.model_bypass_reason,
+            model_called=model_trace.called,
+            preserved_risk_flags=tuple(decision.risk_flags),
+            preserved_reason_codes=tuple(decision.reason_codes),
         )
         decision.trace.append(TraceEntry(stage="manual_fallback", rule_id=None, fields=("category", "intent")))
         return ClassificationResult(
@@ -331,4 +492,5 @@ class TriageEngine:
             refinement_ids=tuple(baseline.refinement_ids),
             schema_valid=schema_valid,
             semantic_violations=tuple(violations or ()),
+            model_trace=model_trace,
         )

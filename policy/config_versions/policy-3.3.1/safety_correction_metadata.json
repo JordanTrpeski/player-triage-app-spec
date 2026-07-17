@@ -1,0 +1,11 @@
+{
+  "bundle_version": "policy-3.3.1",
+  "parent_version": "policy-3.3.0",
+  "rule_id": "RG_EXPLICIT_SELF_EXCLUSION",
+  "rule_editability": "locked",
+  "policy_rules_sha256": "9be9d0e4bd3192b18223a91dff40512c745e9ec654435623800979dd5b0971ee",
+  "research_traceability_sha256": "5e73896ca53855217f208659ee1ef703502db6938bac5a5eea1ef4004e98b717",
+  "ui_editability_sha256": "b7a774729feefce484e79b1ec1182c9254dfd3dfd1dc963ad0aacd2da7df5f9d",
+  "correction": "Generic German explicit account-block, immediate-exclusion, never-gamble-again and permanent-ban patterns plus negation, informational, attributed and quoted guards.",
+  "rollback_target": "policy-3.3.0"
+}

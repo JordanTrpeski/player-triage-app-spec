@@ -1,0 +1,23 @@
+{
+  "version": "phase04-german-self-exclusion-1.0.0",
+  "positive": [
+    {"case_id": "SE-DE-P01", "language": "de", "market": "Malta", "text": "Ich möchte mich selbst ausschließen."},
+    {"case_id": "SE-DE-P02", "language": "de", "market": "Malta", "text": "Bitte sperren Sie mein Konto dauerhaft."},
+    {"case_id": "SE-DE-P03", "language": "de", "market": "Malta", "text": "Ich möchte hier nie wieder spielen können."},
+    {"case_id": "SE-DE-P04", "language": "de", "market": "Malta", "text": "Schließen Sie mich sofort aus."},
+    {"case_id": "SE-DE-P05", "language": "de", "market": "Malta", "text": "Ich will eine permanente Glücksspielsperre."},
+    {"case_id": "SE-DE-P06", "language": "de", "market": "Malta", "text": "Bitte sperren Sie mich dauerhaft vom Glücksspiel aus."},
+    {"case_id": "SE-DE-P07", "language": "de", "market": "Malta", "text": "Ich beantrage eine permanente Selbstsperre."}
+  ],
+  "negative": [
+    {"case_id": "SE-DE-N01", "language": "de", "market": "Malta", "text": "Ich will mich nicht selbst ausschließen."},
+    {"case_id": "SE-DE-N02", "language": "de", "market": "Malta", "text": "Wie funktioniert Selbstausschluss?"},
+    {"case_id": "SE-DE-N03", "language": "de", "market": "Malta", "text": "Ihr Mitarbeiter erwähnte Selbstausschluss."},
+    {"case_id": "SE-DE-N04", "language": "de", "market": "Malta", "text": "Mein Freund sagte mir, ich solle mich selbst ausschließen."},
+    {"case_id": "SE-DE-N05", "language": "de", "market": "Malta", "text": "Ich will keine permanente Glücksspielsperre."},
+    {"case_id": "SE-DE-N06", "language": "de", "market": "Malta", "text": "Der Ausdruck „Selbstsperre“ stand in Ihrer Nachricht."}
+  ],
+  "negative_with_independent_harm": [
+    {"case_id": "SE-DE-H01", "language": "de", "market": "Malta", "text": "Ich will mich nicht selbst ausschließen, but I cannot control my gambling and I keep chasing my losses."}
+  ]
+}
