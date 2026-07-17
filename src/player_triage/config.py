@@ -408,11 +408,16 @@ def load_app_config(
     *,
     strict_version: bool = True,
     expected_version: str = EXPECTED_CONFIGURATION_VERSION,
+    policy_path: Path | str | None = None,
 ) -> AppConfig:
     """Load, validate and return the frozen application configuration."""
 
     root = resolve_app_root(app_root)
-    directory = policy_dir(root)
+    directory = (
+        Path(policy_path).resolve()
+        if policy_path is not None
+        else policy_dir(root)
+    )
     if not directory.is_dir():
         raise MissingConfigurationError(
             component="policy",

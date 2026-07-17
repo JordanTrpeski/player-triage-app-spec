@@ -25,6 +25,12 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from .artifact_io import (
+    atomic_write_json as _atomic_write_json,
+    atomic_write_text as _atomic_write_text,
+    sha256_file,
+    stable_json as _stable_json,
+)
 from .config import AppConfig
 from .engine import ClassificationResult, TriageEngine
 from .errors import ConfigurationError
@@ -32,6 +38,8 @@ from .evaluation import SCORED_FIELDS, evaluate_gates, load_ground_truth
 from .pipeline import ingest as run_ingest
 from .records import IngestedMessage
 from .routing import load_routing_map
+from .signals import SignalContext
+from .validation import SemanticValidator
 
 RULES_ONLY_MODE = "rules_only"
 MODEL_CONCLUSION = "model_rejected_no_material_improvement"
@@ -39,8 +47,9 @@ MODEL_APPROVAL_STATUS = "rejected"
 MODEL_ENABLED = False
 
 CSV_FILENAME = "decisions.csv"
-AUDIT_FILENAME = "audit.jsonl"
-SQLITE_FILENAME = "triage_audit.sqlite3"
+DECISIONS_JSONL_FILENAME = "decisions.jsonl"
+AUDIT_FILENAME = "audit_events.jsonl"
+SQLITE_FILENAME = "audit.sqlite3"
 MANIFEST_FILENAME = "run_manifest.json"
 
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -57,6 +66,7 @@ class OperationalRunError(ConfigurationError):
 @dataclass(frozen=True, slots=True)
 class ArtifactSet:
     csv_path: Path
+    decisions_path: Path
     audit_path: Path
     sqlite_path: Path
     manifest_path: Path
@@ -72,6 +82,8 @@ class OperationalRunResult:
     failure_count: int
     bypass_count: int
     duration_ms: int
+    stage_timings_ms: Mapping[str, int]
+    per_message_latency_ms: tuple[int, ...]
     canonical_decision_digest: str
     artifacts: ArtifactSet
     decisions: tuple[Mapping[str, Any], ...]
@@ -108,7 +120,18 @@ def run_operational_pipeline(
         if output_dir is not None
         else (config.app_root / "output").resolve()
     )
-    output_root.mkdir(parents=True, exist_ok=True)
+    try:
+        output_root.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OperationalRunError(
+            component="output_write_failure",
+            message="output directory is unavailable",
+        ) from exc
+    if not output_root.is_dir():
+        raise OperationalRunError(
+            component="output_write_failure",
+            message="output directory is unavailable",
+        )
 
     started_at = _utc_now()
     started_clock = time.perf_counter()
@@ -123,17 +146,20 @@ def run_operational_pipeline(
     work_dir.mkdir()
 
     try:
+        input_started = time.perf_counter()
         messages = tuple(
             sorted(
                 run_ingest(config, input_path=source),
                 key=lambda item: (item.received_utc, item.msg_id),
             )
         )
+        input_loading_ms = max(0, round((time.perf_counter() - input_started) * 1000))
         engine = (
             engine_factory(config)
             if engine_factory is not None
             else TriageEngine.from_config(config, mode=RULES_ONLY_MODE)
         )
+        processing_started = time.perf_counter()
         results, failures, decision_events, error_events, per_message_ms = _classify_messages(
             config,
             engine,
@@ -141,6 +167,7 @@ def run_operational_pipeline(
             run_id=run_id,
             continue_safe=continue_safe,
         )
+        processing_ms = max(0, round((time.perf_counter() - processing_started) * 1000))
         decisions = tuple(result.decision for result in results)
         evaluation_summary = _build_evaluation_summary(
             config,
@@ -157,12 +184,22 @@ def run_operational_pipeline(
         events = tuple(decision_events + error_events + [summary_event])
 
         csv_path = work_dir / CSV_FILENAME
+        decisions_path = work_dir / DECISIONS_JSONL_FILENAME
         audit_path = work_dir / AUDIT_FILENAME
         sqlite_path = work_dir / SQLITE_FILENAME
         manifest_path = work_dir / MANIFEST_FILENAME
 
+        export_started = time.perf_counter()
         _write_csv_atomic(config, csv_path, decisions)
+        _write_decisions_atomic(config, decisions_path, decisions)
         _write_audit_atomic(config, audit_path, events)
+        export_ms = max(0, round((time.perf_counter() - export_started) * 1000))
+        pre_sqlite_digests = {
+            CSV_FILENAME: sha256_file(csv_path),
+            DECISIONS_JSONL_FILENAME: sha256_file(decisions_path),
+            AUDIT_FILENAME: sha256_file(audit_path),
+        }
+        sqlite_started = time.perf_counter()
         _write_sqlite_atomic(
             config,
             sqlite_path,
@@ -173,14 +210,22 @@ def run_operational_pipeline(
             decisions=decisions,
             events=events,
             evaluation_summary=evaluation_summary,
+            artifact_digests=pre_sqlite_digests,
         )
+        sqlite_write_ms = max(0, round((time.perf_counter() - sqlite_started) * 1000))
 
         artifact_digests = {
-            CSV_FILENAME: sha256_file(csv_path),
-            AUDIT_FILENAME: sha256_file(audit_path),
+            **pre_sqlite_digests,
             SQLITE_FILENAME: sha256_file(sqlite_path),
         }
         duration_ms = max(0, round((time.perf_counter() - started_clock) * 1000))
+        stage_timings_ms = {
+            "input_loading": input_loading_ms,
+            "processing": processing_ms,
+            "decision_and_audit_export": export_ms,
+            "sqlite_write": sqlite_write_ms,
+            "verification": 0,
+        }
         canonical_digest = canonical_decision_digest(decisions)
         bypass_count = sum(
             1
@@ -201,13 +246,30 @@ def run_operational_pipeline(
             duration_ms=duration_ms,
             canonical_digest=canonical_digest,
             artifact_digests=artifact_digests,
+            artifact_counts={
+                CSV_FILENAME: len(decisions),
+                DECISIONS_JSONL_FILENAME: len(decisions),
+                AUDIT_FILENAME: len(events),
+                SQLITE_FILENAME: 1,
+            },
+            stage_timings_ms=stage_timings_ms,
         )
+        _atomic_write_json(manifest_path, manifest)
+        verification_started = time.perf_counter()
+        verify_run_artifacts(config, work_dir)
+        stage_timings_ms["verification"] = max(
+            0, round((time.perf_counter() - verification_started) * 1000)
+        )
+        duration_ms = max(0, round((time.perf_counter() - started_clock) * 1000))
+        manifest["processing_duration_ms"] = duration_ms
+        manifest["stage_timings_ms"] = dict(stage_timings_ms)
         _atomic_write_json(manifest_path, manifest)
         verify_run_artifacts(config, work_dir)
         os.replace(work_dir, final_dir)
 
         final_artifacts = ArtifactSet(
             csv_path=final_dir / CSV_FILENAME,
+            decisions_path=final_dir / DECISIONS_JSONL_FILENAME,
             audit_path=final_dir / AUDIT_FILENAME,
             sqlite_path=final_dir / SQLITE_FILENAME,
             manifest_path=final_dir / MANIFEST_FILENAME,
@@ -221,6 +283,8 @@ def run_operational_pipeline(
             failure_count=len(failures),
             bypass_count=bypass_count,
             duration_ms=duration_ms,
+            stage_timings_ms=stage_timings_ms,
+            per_message_latency_ms=tuple(per_message_ms),
             canonical_decision_digest=canonical_digest,
             artifacts=final_artifacts,
             decisions=decisions,
@@ -451,7 +515,17 @@ def _run_manifest(
     duration_ms: int,
     canonical_digest: str,
     artifact_digests: Mapping[str, str],
+    artifact_counts: Mapping[str, int],
+    stage_timings_ms: Mapping[str, int],
 ) -> dict[str, Any]:
+    artifact_records = {
+        filename: {
+            "relative_path": filename,
+            "record_count": artifact_counts[filename],
+            "sha256": digest,
+        }
+        for filename, digest in sorted(artifact_digests.items())
+    }
     return {
         "run_id": run_id,
         "status": "completed" if not failure_count else "completed_with_failures",
@@ -472,8 +546,10 @@ def _run_manifest(
         "failure_count": failure_count,
         "bypass_count": bypass_count,
         "output_artifact_digests": dict(sorted(artifact_digests.items())),
+        "output_artifacts": artifact_records,
         "canonical_decision_sha256": canonical_digest,
         "processing_duration_ms": duration_ms,
+        "stage_timings_ms": dict(stage_timings_ms),
     }
 
 
@@ -514,6 +590,17 @@ def _write_audit_atomic(
     _verify_audit(config, path)
 
 
+def _write_decisions_atomic(
+    config: AppConfig, path: Path, decisions: Sequence[Mapping[str, Any]]
+) -> None:
+    lines: list[str] = []
+    for decision in decisions:
+        _validate_decision(config, decision)
+        lines.append(_stable_json(decision))
+    _atomic_write_text(path, "\n".join(lines) + ("\n" if lines else ""))
+    _verify_decisions(config, path, len(decisions))
+
+
 def _write_sqlite_atomic(
     config: AppConfig,
     path: Path,
@@ -525,6 +612,7 @@ def _write_sqlite_atomic(
     decisions: Sequence[Mapping[str, Any]],
     events: Sequence[Mapping[str, Any]],
     evaluation_summary: Mapping[str, Any],
+    artifact_digests: Mapping[str, str],
 ) -> None:
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     schema_path = config.app_root / "docs" / "app" / "sqlite_schema.sql"
@@ -555,6 +643,30 @@ def _write_sqlite_atomic(
                     completed_at,
                 ),
             )
+            artifact_counts = {
+                CSV_FILENAME: len(decisions),
+                DECISIONS_JSONL_FILENAME: len(decisions),
+                AUDIT_FILENAME: len(events),
+                SQLITE_FILENAME: 1,
+            }
+            for artifact_name in (
+                CSV_FILENAME,
+                DECISIONS_JSONL_FILENAME,
+                AUDIT_FILENAME,
+                SQLITE_FILENAME,
+            ):
+                connection.execute(
+                    "INSERT INTO artifact_metadata "
+                    "(run_id, artifact_name, relative_path, sha256, record_count) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        run_id,
+                        artifact_name,
+                        artifact_name,
+                        artifact_digests.get(artifact_name),
+                        artifact_counts[artifact_name],
+                    ),
+                )
             connection.execute(
                 "INSERT INTO runs "
                 "(run_id, configuration_version, mode, started_at, finished_at, status) "
@@ -664,22 +776,54 @@ def verify_run_artifacts(config: AppConfig, run_dir: Path | str) -> None:
         raise OperationalRunError(
             component="artifact_verification", message="artifact digests are missing"
         )
-    for filename in (CSV_FILENAME, AUDIT_FILENAME, SQLITE_FILENAME):
+    for filename in (
+        CSV_FILENAME,
+        DECISIONS_JSONL_FILENAME,
+        AUDIT_FILENAME,
+        SQLITE_FILENAME,
+    ):
         expected = recorded.get(filename)
         if not isinstance(expected, str) or sha256_file(directory / filename) != expected:
             raise OperationalRunError(
                 component="artifact_verification", message="artifact digest mismatch"
             )
+    artifact_records = manifest.get("output_artifacts")
+    if not isinstance(artifact_records, Mapping):
+        raise OperationalRunError(
+            component="artifact_verification", message="artifact metadata is missing"
+        )
+    for filename in (
+        CSV_FILENAME,
+        DECISIONS_JSONL_FILENAME,
+        AUDIT_FILENAME,
+        SQLITE_FILENAME,
+    ):
+        record = artifact_records.get(filename)
+        if (
+            not isinstance(record, Mapping)
+            or record.get("relative_path") != filename
+            or record.get("sha256") != recorded.get(filename)
+        ):
+            raise OperationalRunError(
+                component="artifact_verification", message="artifact metadata mismatch"
+            )
 
     success_count = int(manifest["success_count"])
     csv_rows = _verify_csv(config, directory / CSV_FILENAME, success_count)
+    decisions = _verify_decisions(
+        config, directory / DECISIONS_JSONL_FILENAME, success_count
+    )
     events = _verify_audit(config, directory / AUDIT_FILENAME)
-    decisions = [
+    event_decisions = [
         event["payload"]["result"]
         for event in events
         if event.get("event_type") == "decision"
     ]
-    if len(decisions) != success_count or len(csv_rows) != success_count:
+    if (
+        len(decisions) != success_count
+        or len(event_decisions) != success_count
+        or len(csv_rows) != success_count
+    ):
         raise OperationalRunError(
             component="artifact_verification", message="artifact counts disagree"
         )
@@ -689,6 +833,11 @@ def verify_run_artifacts(config: AppConfig, run_dir: Path | str) -> None:
             raise OperationalRunError(
                 component="artifact_verification", message="model call found in Phase 05 output"
             )
+    if canonical_decision_digest(decisions) != canonical_decision_digest(event_decisions):
+        raise OperationalRunError(
+            component="artifact_verification",
+            message="decision and audit JSONL artifacts disagree",
+        )
 
     _verify_sqlite(
         directory / SQLITE_FILENAME,
@@ -699,7 +848,7 @@ def verify_run_artifacts(config: AppConfig, run_dir: Path | str) -> None:
         raise OperationalRunError(
             component="artifact_verification", message="canonical decision digest mismatch"
         )
-    _scan_safe(config, manifest, csv_rows, events)
+    _scan_safe(config, manifest, csv_rows, decisions, events)
 
 
 def append_human_override(
@@ -709,8 +858,35 @@ def append_human_override(
     message_id: str,
     reason_code: str,
     after_decision_path: Path | str,
+    actor_label: str | None = None,
 ) -> str:
     """Append a schema-valid override without mutating the original decision."""
+
+    after = json.loads(Path(after_decision_path).read_text(encoding="utf-8"))
+    if not isinstance(after, dict) or after.get("message_id") != message_id:
+        raise OperationalRunError(
+            component="human_override", message="override decision message_id mismatch"
+        )
+    return append_human_override_decision(
+        config,
+        run_dir=run_dir,
+        message_id=message_id,
+        reason_code=reason_code,
+        after=after,
+        actor_label=actor_label,
+    )
+
+
+def append_human_override_decision(
+    config: AppConfig,
+    *,
+    run_dir: Path | str,
+    message_id: str,
+    reason_code: str,
+    after: Mapping[str, Any],
+    actor_label: str | None = None,
+) -> str:
+    """Append a validated corrected view while preserving the machine decision."""
 
     directory = Path(run_dir).resolve()
     verify_run_artifacts(config, directory)
@@ -729,8 +905,7 @@ def append_human_override(
         raise OperationalRunError(
             component="human_override", message="parent decision event was not found"
         )
-    after = json.loads(Path(after_decision_path).read_text(encoding="utf-8"))
-    if not isinstance(after, dict) or after.get("message_id") != message_id:
+    if after.get("message_id") != message_id:
         raise OperationalRunError(
             component="human_override", message="override decision message_id mismatch"
         )
@@ -743,7 +918,45 @@ def append_human_override(
             component="human_override", message="override reason code is not approved"
         )
     _validate_decision(config, after)
+    context = SignalContext(
+        msg_id=message_id,
+        text="",
+        flags={str(flag): True for flag in after.get("risk_flags", ())},
+        sensitive_data_types=tuple(
+            str(value) for value in after.get("sensitive_data_types", ())
+        ),
+        previous_contact_count=int(after.get("previous_contact_count", 0)),
+        first_contact_message_id=(
+            str(after["first_contact_message_id"])
+            if after.get("first_contact_message_id") is not None
+            else None
+        ),
+        related_message_ids=tuple(
+            str(value) for value in after.get("related_message_ids", ())
+        ),
+        attachment_received=bool(after.get("attachment_received")),
+        attachment_referenced=bool(after.get("attachment_referenced")),
+        identity_document_referenced=bool(
+            after.get("identity_document_referenced")
+        ),
+        market=str(after.get("market", "")),
+        market_overlay_codes=tuple(
+            str(value) for value in after.get("market_overlay_codes", ())
+        ),
+        market_framework_status=str(after.get("market_framework_status", "")),
+        ingestion_eligibility_state=str(after.get("model_eligibility", "")),
+        ingestion_eligibility_reason=(
+            str(after["model_bypass_reason"])
+            if after.get("model_bypass_reason") is not None
+            else None
+        ),
+    )
+    if SemanticValidator.from_config(config).validate(after, context):
+        raise OperationalRunError(
+            component="human_override", message="override violates semantic constraints"
+        )
     _scan_safe(config, after)
+    actor_ref = _safe_actor_ref(actor_label)
 
     event_id = f"{manifest['run_id']}-override-{uuid.uuid4().hex}"
     event = {
@@ -753,7 +966,11 @@ def append_human_override(
         "run_id": manifest["run_id"],
         "occurred_at": _utc_now(),
         "message_id": message_id,
-        "actor": {"type": "human", "role": "authorized-reviewer", "actor_ref": None},
+        "actor": {
+            "type": "human",
+            "role": "authorized-reviewer",
+            "actor_ref": actor_ref,
+        },
         "configuration_version": config.bundle_version,
         "payload": {
             "parent_event_id": parent["event_id"],
@@ -767,13 +984,19 @@ def append_human_override(
 
     new_events = tuple(events + [event])
     _write_audit_atomic(config, directory / AUDIT_FILENAME, new_events)
-    _append_override_sqlite_atomic(config, directory / SQLITE_FILENAME, event)
-    manifest["output_artifact_digests"][AUDIT_FILENAME] = sha256_file(
-        directory / AUDIT_FILENAME
+    audit_digest = sha256_file(directory / AUDIT_FILENAME)
+    _append_override_sqlite_atomic(
+        config, directory / SQLITE_FILENAME, event, audit_digest=audit_digest
     )
+    manifest["output_artifact_digests"][AUDIT_FILENAME] = audit_digest
     manifest["output_artifact_digests"][SQLITE_FILENAME] = sha256_file(
         directory / SQLITE_FILENAME
     )
+    manifest["output_artifacts"][AUDIT_FILENAME]["sha256"] = audit_digest
+    manifest["output_artifacts"][AUDIT_FILENAME]["record_count"] = len(new_events)
+    manifest["output_artifacts"][SQLITE_FILENAME]["sha256"] = manifest[
+        "output_artifact_digests"
+    ][SQLITE_FILENAME]
     manifest["last_override_at"] = event["occurred_at"]
     manifest["override_count"] = int(manifest.get("override_count", 0)) + 1
     _atomic_write_json(manifest_path, manifest)
@@ -781,8 +1004,23 @@ def append_human_override(
     return event_id
 
 
+def _safe_actor_ref(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned or len(cleaned) > 80 or any(char in cleaned for char in "\r\n<>"):
+        raise OperationalRunError(
+            component="human_override", message="reviewer actor label is invalid"
+        )
+    return cleaned
+
+
 def _append_override_sqlite_atomic(
-    config: AppConfig, path: Path, event: Mapping[str, Any]
+    config: AppConfig,
+    path: Path,
+    event: Mapping[str, Any],
+    *,
+    audit_digest: str,
 ) -> None:
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     shutil.copy2(path, temporary)
@@ -804,6 +1042,11 @@ def _append_override_sqlite_atomic(
                     config.bundle_version,
                     _stable_json(event),
                 ),
+            )
+            connection.execute(
+                "UPDATE artifact_metadata SET sha256 = ?, record_count = record_count + 1 "
+                "WHERE run_id = ? AND artifact_name = ?",
+                (audit_digest, event["run_id"], AUDIT_FILENAME),
             )
             connection.execute(
                 "INSERT INTO human_overrides "
@@ -837,14 +1080,6 @@ def _append_override_sqlite_atomic(
 def canonical_decision_digest(decisions: Sequence[Mapping[str, Any]]) -> str:
     ordered = sorted(decisions, key=lambda item: str(item.get("message_id", "")))
     return hashlib.sha256(_stable_json(ordered).encode("utf-8")).hexdigest()
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def protect_csv_formula(value: str) -> str:
@@ -887,6 +1122,19 @@ def _verify_audit(config: AppConfig, path: Path) -> list[dict[str, Any]]:
     return events
 
 
+def _verify_decisions(
+    config: AppConfig, path: Path, expected_count: int
+) -> list[dict[str, Any]]:
+    decisions = _read_jsonl(path)
+    if len(decisions) != expected_count:
+        raise OperationalRunError(
+            component="decision_export", message="decision JSONL count is incorrect"
+        )
+    for decision in decisions:
+        _validate_decision(config, decision)
+    return decisions
+
+
 def _verify_sqlite(path: Path, *, decision_count: int, event_count: int) -> None:
     connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
     try:
@@ -900,6 +1148,7 @@ def _verify_sqlite(path: Path, *, decision_count: int, event_count: int) -> None
             "decisions": decision_count,
             "audit_events": event_count,
             "evaluation_summaries": 1,
+            "artifact_metadata": 4,
         }
         for table, expected in counts.items():
             actual = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
@@ -970,23 +1219,6 @@ def _validate_evaluation_summary(config: AppConfig, summary: Mapping[str, Any]) 
     )
 
 
-def _atomic_write_json(path: Path, document: Mapping[str, Any]) -> None:
-    _atomic_write_text(path, _stable_json(document) + "\n")
-
-
-def _atomic_write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with temporary.open("x", encoding="utf-8", newline="") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def _write_failure_record(
     output_root: Path, run_id: str, configuration_version: str, exc: Exception
 ) -> None:
@@ -1028,10 +1260,6 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
             )
         events.append(item)
     return events
-
-
-def _stable_json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _sync_file(path: Path) -> None:

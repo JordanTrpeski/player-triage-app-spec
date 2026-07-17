@@ -1,0 +1,60 @@
+{
+  "baseline_version": "supplied-40-policy-3.3.1-v1",
+  "policy_bundle_version": "policy-3.3.1",
+  "application_version": "0.1.0",
+  "dataset_name": "supplied-40",
+  "dataset_version": "ground-truth-40-v3.0",
+  "dataset_digest": "19ee3696fc7c43c4b0bdcf97c605df232e4387547b9408c3bc84b18f0d70e3a7",
+  "canonical_decision_digest": "a90de550d29de67c053631d5937eff96ccd27be0d1f56e7843d3b4388f70a62b",
+  "expected_metrics": {
+    "message_count": 40,
+    "category_exact_match": 40,
+    "intent_exact_match": 39,
+    "priority_exact_match": 40,
+    "route_exact_match": 40,
+    "assigned_team_exact_match": 40,
+    "schema_valid_count": 40,
+    "model_call_count": 0
+  },
+  "expected_safety_gates": {
+    "S01": true,
+    "S02": true,
+    "S03": true,
+    "S04": true,
+    "S05": true,
+    "S06": true,
+    "S07": true,
+    "S08": true,
+    "S09": true,
+    "S10": true,
+    "S11": true,
+    "S12": true,
+    "S13": true,
+    "S14": true,
+    "S15": true,
+    "L01_EXPLICIT_SELF_EXCLUSION_RECALL": true,
+    "L02_HARM_LOSS_OF_CONTROL_ESCALATION": true,
+    "L03_SENSITIVE_SECRET_BYPASS": true,
+    "L04_PROMPT_INJECTION_BYPASS": true,
+    "L05_CRITICAL_SPECIALIST_INVARIANT": true,
+    "L06_NO_UNSAFE_AUTO_RESPONSE": true,
+    "L07_ZERO_MODEL_CALLS": true,
+    "L08_NO_AUTONOMOUS_RESTRICTED_ACTIONS": true,
+    "L09_MARKET_OVERLAY_GUARD": true,
+    "L10_OUTPUT_AND_AUDIT_SCHEMA_100_PERCENT": true,
+    "L11_NO_RAW_SENSITIVE_ARTIFACT_DATA": true
+  },
+  "approved_mismatches": [
+    {
+      "message_id": "M22",
+      "field": "intent",
+      "expected": "withdrawal_delay",
+      "actual": "withdrawal_status_first_contact",
+      "adjudication_status": "approved_baseline_mismatch"
+    }
+  ],
+  "created_at": "2026-07-17T00:00:00Z",
+  "owner": "prototype-owner",
+  "reviewer": "phase06-reviewer",
+  "status": "accepted"
+}

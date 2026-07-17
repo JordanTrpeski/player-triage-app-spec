@@ -34,9 +34,14 @@ def test_evaluate_command_reports_gates(app_root: Path) -> None:
     assert "EVALUATE COMPLETE (all safety gates passed)" in result.output
 
 
-def test_demo_command_not_yet_implemented() -> None:
-    result = runner.invoke(app, ["demo"])
-    assert result.exit_code == 2
+def test_demo_command_preflight_is_local_and_rules_only(app_root: Path) -> None:
+    result = runner.invoke(
+        app, ["demo", "--dry-run", "--app-root", str(app_root)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "rules_only; model unavailable" in result.output
+    assert "http://127.0.0.1:8501" in result.output
+    assert "DEMO DRY RUN COMPLETE" in result.output
 
 
 def test_kill_switch_command_not_yet_implemented() -> None:

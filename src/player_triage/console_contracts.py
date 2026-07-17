@@ -1,0 +1,123 @@
+"""Typed service contracts for the local Streamlit control console."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Mapping, Protocol, Sequence
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardSnapshot:
+    active_policy_version: str
+    application_version: str
+    runtime_mode: str
+    model_status: str
+    model_calls: int
+    kill_switch_enabled: bool
+    latest_run_id: str
+    latest_run_status: str
+    canonical_digest: str
+    counts: Mapping[str, int]
+    distributions: Mapping[str, Mapping[str, int]]
+    manual_review_rate: float
+    specialist_rate: float
+    official_gates_passed: int
+    official_gate_count: int
+    locked_gates_passed: int
+    locked_gate_count: int
+    core_mismatch_count: int
+    diagnostic_difference_count: int
+    p50_latency_ms: float
+    p95_latency_ms: float
+    messages_per_second: float
+    replay_900_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class MessageView:
+    message_id: str
+    decision: Mapping[str, Any]
+    expected_actual: tuple[Mapping[str, Any], ...]
+    core_mismatch: bool
+    diagnostic_difference: bool
+    rules_triggered: tuple[str, ...]
+    decision_path: str
+    audit_event_id: str
+    configuration_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuditView:
+    event_id: str
+    run_id: str
+    message_id: str | None
+    event_type: str
+    occurred_at: str
+    configuration_version: str
+    actor: Mapping[str, Any]
+    payload: Mapping[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class VersionView:
+    version_id: str
+    parent_version_id: str | None
+    status: str
+    actor: str
+    change_reason: str
+    bundle_digest: str
+    validation_passed: bool | None
+    regression_passed: bool | None
+    gates_passed: bool | None
+    activated_at: str | None
+    rollback_available: bool
+    summary: str
+
+
+class DashboardService(Protocol):
+    def dashboard(self) -> DashboardSnapshot: ...
+
+
+class MessageReviewService(Protocol):
+    def messages(self, filters: Mapping[str, object] | None = None) -> Sequence[MessageView]: ...
+
+
+class HumanOverrideService(Protocol):
+    def submit_override(
+        self,
+        message_id: str,
+        proposed: Mapping[str, Any],
+        reason_code: str,
+        actor_label: str,
+    ) -> str: ...
+
+
+class PolicyDraftService(Protocol):
+    def create_draft(self, actor: str, change_reason: str) -> Mapping[str, Any]: ...
+
+    def validate_draft(self, draft_id: str) -> Mapping[str, Any]: ...
+
+
+class ImpactAnalysisService(Protocol):
+    def impact_preview(self, draft_id: str) -> Mapping[str, Any]: ...
+
+
+class ActivationGateService(Protocol):
+    def activate(self, draft_id: str, actor: str, confirmation: str) -> str: ...
+
+
+class ConfigurationVersionService(Protocol):
+    def versions(self) -> Sequence[VersionView]: ...
+
+    def rollback(self, version_id: str, actor: str, reason: str, confirmation: str) -> str: ...
+
+
+class AuditQueryService(Protocol):
+    def audit_events(self, filters: Mapping[str, object] | None = None) -> Sequence[AuditView]: ...
+
+
+class SettingsService(Protocol):
+    def settings(self) -> Mapping[str, Any]: ...
+
+    def set_kill_switch(self, enabled: bool, actor: str, confirmation: str) -> None: ...
+

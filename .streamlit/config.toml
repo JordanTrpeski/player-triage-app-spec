@@ -1,0 +1,13 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+address = "127.0.0.1"
+headless = true
+enableCORS = true
+enableXsrfProtection = true
+fileWatcherType = "none"
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"

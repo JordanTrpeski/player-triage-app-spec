@@ -17,6 +17,7 @@ from player_triage.config import AppConfig, load_app_config
 from player_triage.operational import (
     AUDIT_FILENAME,
     CSV_FILENAME,
+    DECISIONS_JSONL_FILENAME,
     MANIFEST_FILENAME,
     MODEL_CONCLUSION,
     SQLITE_FILENAME,
@@ -84,6 +85,14 @@ def test_complete_40_message_pipeline_and_artifact_contracts(
         reader.fieldnames or []
     )
 
+    decision_lines = [
+        json.loads(line)
+        for line in run.artifacts.decisions_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    assert len(decision_lines) == 40
+    assert decision_lines == list(run.decisions)
+
     events = _events(run)
     assert len(events) == 41
     assert sum(event["event_type"] == "decision" for event in events) == 40
@@ -126,6 +135,7 @@ def test_complete_40_message_pipeline_and_artifact_contracts(
         assert connection.execute("SELECT COUNT(*) FROM decisions").fetchone() == (40,)
         assert connection.execute("SELECT COUNT(*) FROM audit_events").fetchone() == (41,)
         assert connection.execute("SELECT COUNT(*) FROM evaluation_summaries").fetchone() == (1,)
+        assert connection.execute("SELECT COUNT(*) FROM artifact_metadata").fetchone() == (4,)
         indexes = {
             row[0]
             for row in connection.execute(
@@ -317,6 +327,7 @@ def test_output_files_are_named_by_authoritative_artifact_contract(
     completed_run: OperationalRunResult,
 ) -> None:
     assert completed_run.artifacts.csv_path.name == CSV_FILENAME
+    assert completed_run.artifacts.decisions_path.name == DECISIONS_JSONL_FILENAME
     assert completed_run.artifacts.audit_path.name == AUDIT_FILENAME
     assert completed_run.artifacts.sqlite_path.name == SQLITE_FILENAME
     assert completed_run.artifacts.manifest_path.name == MANIFEST_FILENAME
