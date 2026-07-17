@@ -1,0 +1,9 @@
+expected_category,Bonuses & Promotions,Complaints & Regulatory,Fraud & Compliance,General,KYC & Verification,Payments & Withdrawals,Responsible Gambling,Technical & Game Issues
+Bonuses & Promotions,8,0,0,0,0,0,0,0
+Complaints & Regulatory,0,2,0,0,0,0,0,0
+Fraud & Compliance,0,0,1,0,0,0,0,0
+General,0,0,0,6,0,0,0,0
+KYC & Verification,0,0,0,0,4,0,0,0
+Payments & Withdrawals,0,0,0,0,0,12,0,0
+Responsible Gambling,0,0,0,0,0,0,4,0
+Technical & Game Issues,0,0,0,0,0,0,0,3

@@ -1,0 +1,64 @@
+message_id,field,expected,actual,applicable_rule_ids,reason_codes,dataset_name,adjudication_status
+M22,intent,"""withdrawal_delay""","""withdrawal_status_first_contact""",INT_WITHDRAWAL_STATUS,PAYMENT_STATUS_FIRST_CONTACT;INDIA_MARKET_OVERLAY,supplied-40,approved_baseline_mismatch
+M01,risk_flags,"[""account_specific"",""withdrawal_pending""]",[],INT_WITHDRAWAL_STATUS,PAYMENT_STATUS_FIRST_CONTACT,supplied-40,diagnostic_non_baseline_difference
+M02,risk_flags,"[""account_specific"",""promotion_not_credited""]",[],INT_FREE_SPINS,PROMO_CREDIT_MISSING,supplied-40,diagnostic_non_baseline_difference
+M04,risk_flags,"[""account_access_issue"",""no_compromise_alleged""]",[],INT_LOGIN,ACCOUNT_ACCESS_ROUTINE,supplied-40,diagnostic_non_baseline_difference
+M05,risk_flags,"[""bank_authorization_hold"",""deposit_declined""]",[],INT_FAILED_DEPOSIT,FAILED_DEPOSIT_AUTH_HOLD,supplied-40,diagnostic_non_baseline_difference
+M06,risk_flags,"[""account_specific"",""cashback_discrepancy""]",[],INT_CASHBACK,CASHBACK_CALCULATION_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M07,secondary_teams,"[""Promotions""]",[],RG_LOSS_OF_CONTROL_CLOSURE,RG_LOSS_OF_CONTROL_CLOSURE,supplied-40,diagnostic_non_baseline_difference
+M07,risk_flags,"[""harm_linked_closure"",""loss_of_control"",""repeated_withdrawal_reversal""]","[""harm_linked_closure"",""loss_of_control""]",RG_LOSS_OF_CONTROL_CLOSURE,RG_LOSS_OF_CONTROL_CLOSURE,supplied-40,diagnostic_non_baseline_difference
+M10,reason_codes,"[""REGISTERED_MOBILE_CHANGE""]","[""INDIA_MARKET_OVERLAY"",""REGISTERED_MOBILE_CHANGE""]",DERIVED_REGISTERED_CHANNEL_CHANGE;INT_MOBILE_CHANGE,REGISTERED_MOBILE_CHANGE;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M11,risk_flags,"[""cvv_exposed"",""full_pan_exposed"",""payment_dispute""]","[""sensitive_authentication_data""]",INT_MISSING_DEPOSIT;PCI_SENSITIVE_AUTH_DATA,PCI_SENSITIVE_AUTH_DATA;MISSING_DEPOSIT_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M12,secondary_teams,"[""Promotions""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M12,risk_flags,"[""bonus_context"",""general_payment_timing""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M13,risk_flags,"[""birthday_bonus"",""vip_contact_unavailable""]",[],INT_VIP_BONUS,VIP_PROMO_SUPPORT,supplied-40,diagnostic_non_baseline_difference
+M14,risk_flags,"[""no_account_action"",""tax_question""]",[],INT_TAX,GENERAL_TAX_DISCLAIMER,supplied-40,diagnostic_non_baseline_difference
+M15,secondary_teams,"[""KYC Operations"",""Market Compliance"",""Payments Security"",""Responsible Gambling""]","[""KYC Operations"",""Payments Security"",""Responsible Gambling""]",THIRD_PARTY_PAYMENT_REPORTED;UNDERAGE_GAMBLING_REPORTED,UNDERAGE_GAMBLING_REPORTED;THIRD_PARTY_PAYMENT_REPORTED,supplied-40,diagnostic_non_baseline_difference
+M15,risk_flags,"[""closure_requested"",""refund_requested"",""third_party_payment"",""unauthorized_card_use"",""underage_reported""]","[""third_party_payment"",""unauthorized_card_use"",""underage_reported""]",THIRD_PARTY_PAYMENT_REPORTED;UNDERAGE_GAMBLING_REPORTED,UNDERAGE_GAMBLING_REPORTED;THIRD_PARTY_PAYMENT_REPORTED,supplied-40,diagnostic_non_baseline_difference
+M16,risk_flags,"[""static_bonus_terms_question""]",[],INT_WAGERING,STATIC_BONUS_TERMS_FAQ,supplied-40,diagnostic_non_baseline_difference
+M17,risk_flags,"[""app_crash"",""device_context""]",[],INT_APP_CRASH,TECHNICAL_APP_FAILURE;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M18,risk_flags,"[""prompt_injection_detected"",""withdrawal_pending""]","[""prompt_injection_detected""]",DERIVED_INJECTION_WITHDRAWAL_BUSINESS;INT_WITHDRAWAL_STATUS;PROMPT_INJECTION_UNTRUSTED_INPUT;REF_PROMPT_INJECTION,PROMPT_INJECTION_DETECTED;MODEL_BYPASSED_UNTRUSTED_INPUT;WITHDRAWAL_DELAY,supplied-40,diagnostic_non_baseline_difference
+M19,risk_flags,"[""static_document_requirements""]",[],INT_PROOF_ADDRESS,STATIC_KYC_DOCUMENT_FAQ,supplied-40,diagnostic_non_baseline_difference
+M20,secondary_teams,"[""Market Compliance""]",[],INT_PROMO_ELIGIBILITY,PROMO_ELIGIBILITY_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M20,risk_flags,"[""account_specific"",""advertising_claim"",""market_eligibility""]",[],INT_PROMO_ELIGIBILITY,PROMO_ELIGIBILITY_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M22,risk_flags,"[""multilingual"",""withdrawal_pending""]",[],INT_WITHDRAWAL_STATUS,PAYMENT_STATUS_FIRST_CONTACT;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M22,reason_codes,"[""INDIA_MARKET_OVERLAY"",""WITHDRAWAL_DELAY""]","[""INDIA_MARKET_OVERLAY"",""PAYMENT_STATUS_FIRST_CONTACT""]",INT_WITHDRAWAL_STATUS,PAYMENT_STATUS_FIRST_CONTACT;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M23,risk_flags,"[""german_language"",""permanent"",""self_exclusion_explicit""]","[""self_exclusion_explicit""]",RG_EXPLICIT_SELF_EXCLUSION,RG_EXPLICIT_SELF_EXCLUSION,supplied-40,diagnostic_non_baseline_difference
+M24,risk_flags,"[""registered_email_available"",""routine_account_recovery""]",[],INT_USERNAME,STATIC_ACCOUNT_RECOVERY_FAQ,supplied-40,diagnostic_non_baseline_difference
+M25,secondary_teams,"[""Market Compliance"",""Payments Operations""]",[],FORMAL_COMPLAINT,FORMAL_COMPLAINT,supplied-40,diagnostic_non_baseline_difference
+M25,risk_flags,"[""formal_complaint"",""large_amount"",""player_deadline"",""regulator_mentioned"",""repeat_contact""]","[""attachment_referenced"",""formal_complaint""]",FORMAL_COMPLAINT,FORMAL_COMPLAINT,supplied-40,diagnostic_non_baseline_difference
+M25,reason_codes,"[""EXTERNAL_BODY_MENTIONED"",""FORMAL_COMPLAINT""]","[""FORMAL_COMPLAINT""]",FORMAL_COMPLAINT,FORMAL_COMPLAINT,supplied-40,diagnostic_non_baseline_difference
+M26,risk_flags,"[""static_bonus_terms_question""]",[],INT_BONUS_MAX_BET;INT_WAGERING,STATIC_BONUS_TERMS_FAQ,supplied-40,diagnostic_non_baseline_difference
+M27,secondary_teams,"[""Promotions""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M27,risk_flags,"[""bonus_context"",""general_payment_timing"",""near_duplicate""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M28,secondary_teams,"[""Market Compliance""]",[],RG_LIMIT_RELAXATION,LIMIT_RELAXATION_REQUEST,supplied-40,diagnostic_non_baseline_difference
+M28,reason_codes,"[""RG_LIMIT_RELAXATION""]","[""LIMIT_RELAXATION_REQUEST""]",RG_LIMIT_RELAXATION,LIMIT_RELAXATION_REQUEST,supplied-40,diagnostic_non_baseline_difference
+M29,secondary_teams,"[""Payments Operations""]",[],INT_GAME_DISPUTE;INT_GAME_INTERRUPTION,GAME_RESULT_DISPUTE,supplied-40,diagnostic_non_baseline_difference
+M29,risk_flags,"[""attachment_referenced"",""claimed_win"",""game_disconnection"",""provider_investigation_requested""]","[""attachment_referenced""]",INT_GAME_DISPUTE;INT_GAME_INTERRUPTION,GAME_RESULT_DISPUTE,supplied-40,diagnostic_non_baseline_difference
+M29,reason_codes,"[""EVIDENCE_REFERENCED"",""GAME_RESULT_DISPUTE""]","[""GAME_RESULT_DISPUTE""]",INT_GAME_DISPUTE;INT_GAME_INTERRUPTION,GAME_RESULT_DISPUTE,supplied-40,diagnostic_non_baseline_difference
+M30,secondary_teams,"[""CRM & Privacy"",""Market Compliance""]","[""Market Compliance""]",INT_STATEMENT,ACCOUNT_STATEMENT_REQUEST;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M30,risk_flags,"[""personal_data_export"",""transaction_history_request""]",[],INT_STATEMENT,ACCOUNT_STATEMENT_REQUEST;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M31,risk_flags,"[""external_escalation_implied"",""no_response"",""prior_ticket"",""repeat_contact""]","[""external_escalation_implied"",""formal_complaint"",""no_response"",""repeat_contact""]",DERIVED_REPEAT_WITHDRAWAL_ESCALATION;FORMAL_COMPLAINT;INT_WITHDRAWAL_STATUS;REF_REPEAT_WITHDRAWAL,WITHDRAWAL_REPEAT_CONTACT;FORMAL_COMPLAINT;REPEAT_CONTACT,supplied-40,diagnostic_non_baseline_difference
+M31,reason_codes,"[""FORMAL_COMPLAINT"",""REPEAT_CONTACT""]","[""FORMAL_COMPLAINT"",""REPEAT_CONTACT"",""WITHDRAWAL_REPEAT_CONTACT""]",DERIVED_REPEAT_WITHDRAWAL_ESCALATION;FORMAL_COMPLAINT;INT_WITHDRAWAL_STATUS;REF_REPEAT_WITHDRAWAL,WITHDRAWAL_REPEAT_CONTACT;FORMAL_COMPLAINT;REPEAT_CONTACT,supplied-40,diagnostic_non_baseline_difference
+M33,risk_flags,"[""account_remains_active"",""marketing_opt_out"",""no_harm_signal""]","[""account_remains_active"",""marketing_opt_out""]",MARKETING_OPTOUT_ONLY,MARKETING_OPTOUT_ONLY,supplied-40,diagnostic_non_baseline_difference
+M34,secondary_teams,"[""Promotions""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M34,risk_flags,"[""bonus_context"",""general_payment_timing"",""near_duplicate""]",[],INT_WAGERING;INT_WITHDRAWAL_AFTER_BONUS,STATIC_WITHDRAWAL_TIMING_FAQ,supplied-40,diagnostic_non_baseline_difference
+M36,secondary_teams,"[""KYC Operations""]",[],ACCOUNT_REOPEN_REASON_UNKNOWN,ACCOUNT_REOPEN_REASON_UNKNOWN;RG_REOPEN_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M36,reason_codes,"[""ACCOUNT_REOPEN_REASON_UNKNOWN""]","[""ACCOUNT_REOPEN_REASON_UNKNOWN"",""RG_REOPEN_REVIEW""]",ACCOUNT_REOPEN_REASON_UNKNOWN,ACCOUNT_REOPEN_REASON_UNKNOWN;RG_REOPEN_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M37,risk_flags,"[""static_loyalty_terms_question""]",[],INT_LOYALTY,STATIC_LOYALTY_FAQ,supplied-40,diagnostic_non_baseline_difference
+M38,secondary_teams,"[""Technical Support""]",[],INT_KYC_UPLOAD,KYC_UPLOAD_TECHNICAL_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M38,risk_flags,"[""identity_data_sensitive"",""large_file"",""passport_referenced"",""upload_error""]","[""passport_referenced""]",INT_KYC_UPLOAD,KYC_UPLOAD_TECHNICAL_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M38,reason_codes,"[""IDENTITY_DOCUMENT_REFERENCED"",""KYC_UPLOAD_TECHNICAL_REVIEW""]","[""KYC_UPLOAD_TECHNICAL_REVIEW""]",INT_KYC_UPLOAD,KYC_UPLOAD_TECHNICAL_REVIEW,supplied-40,diagnostic_non_baseline_difference
+M39,secondary_teams,"[""Market Compliance"",""Payments Operations""]","[""Market Compliance""]",INT_CASHBACK;REF_CASHBACK_DISPUTE,CASHBACK_CALCULATION_REVIEW;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M39,risk_flags,"[""account_specific"",""cashback_discrepancy""]",[],INT_CASHBACK;REF_CASHBACK_DISPUTE,CASHBACK_CALCULATION_REVIEW;INDIA_MARKET_OVERLAY,supplied-40,diagnostic_non_baseline_difference
+M40,risk_flags,"[""compliment"",""no_action_requested""]",[],INT_COMPLIMENT,COMPLIMENT_ACKNOWLEDGMENT,supplied-40,diagnostic_non_baseline_difference
+M50,intent,"""login_password_reset_failure""","""unclassified_manual_review""",PCI_SENSITIVE_AUTH_DATA,PCI_SENSITIVE_AUTH_DATA;UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M53,category,"""Fraud & Compliance""","""General""",THIRD_PARTY_PAYMENT_REPORTED,THIRD_PARTY_PAYMENT_REPORTED;UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M53,assigned_team,"""Fraud & Account Security""","""General Support""",THIRD_PARTY_PAYMENT_REPORTED,THIRD_PARTY_PAYMENT_REPORTED;UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M60,intent,"""login_password_reset_failure""","""unclassified_manual_review""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M61,category,"""Payments & Withdrawals""","""General""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M61,intent,"""withdrawal_status_first_contact""","""unclassified_manual_review""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M61,assigned_team,"""Payments Operations""","""General Support""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M64,category,"""Payments & Withdrawals""","""General""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M64,intent,"""withdrawal_delay""","""unclassified_manual_review""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
+M64,assigned_team,"""Payments Operations""","""General Support""",,UNCLASSIFIED_MANUAL_REVIEW,holdout-v1,unadjudicated
