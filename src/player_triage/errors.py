@@ -16,6 +16,10 @@ class ConfigurationError(Exception):
 
     def __init__(self, component: str, message: str, *, path: Path | None = None) -> None:
         self.component = component
+        #: The sanitized message without the component prefix or path hint.
+        #: Imported-run validation reports surface this rather than ``str(exc)``
+        #: so operator-facing output carries no filesystem path.
+        self.message = message
         self.path_hint = str(path) if path is not None else None
         detail = f"[{component}] {message}"
         if self.path_hint is not None:

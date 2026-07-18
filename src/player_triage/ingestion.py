@@ -22,7 +22,7 @@ import csv
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Final, Iterable, Iterator
+from typing import Any, Callable, Final, Iterable, Iterator
 
 from openpyxl import load_workbook
 
@@ -57,6 +57,11 @@ _PLAYER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^P-\d{5}$")
 
 class IngestionError(ConfigurationError):
     """Raised when the input dataset cannot be safely ingested."""
+
+
+#: Returns a sanitized error fragment for an unacceptable message identifier,
+#: or ``None`` when the identifier is acceptable.
+MessageIdValidator = Callable[[str], "str | None"]
 
 
 def _require_headers(headers: list[str], *, source: Path) -> None:
@@ -111,6 +116,19 @@ def _parse_timestamp(value: str, *, msg_id: str, source: Path) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _benchmark_message_id_error(msg_id: str) -> str | None:
+    """Supplied-40 benchmark identifier rule: ``^M\\d{2}$`` (M01-M40).
+
+    This is the accepted benchmark contract and is deliberately unchanged.
+    Imported datasets use the wider ``source_message_id`` rule in
+    :mod:`player_triage.imported_identifiers` instead.
+    """
+
+    if not _MESSAGE_ID_PATTERN.match(msg_id):
+        return "msg_id must match ^M\\d{2}$"
+    return None
+
+
 def _validate_and_build(
     row: dict[str, str],
     *,
@@ -118,12 +136,22 @@ def _validate_and_build(
     source_row: int,
     source_format: str,
     seen_ids: set[str],
+    message_id_error: MessageIdValidator = _benchmark_message_id_error,
 ) -> RawMessage:
+    """Validate one row and build a :class:`RawMessage`, or raise.
+
+    ``message_id_error`` is injected so the imported-data path can apply the
+    wider ``^M[0-9]{1,9}$`` rule while reusing byte-for-byte identical
+    validation of every other field. The default preserves the supplied-40
+    benchmark behaviour exactly.
+    """
+
     msg_id = (row.get("msg_id") or "").strip()
-    if not _MESSAGE_ID_PATTERN.match(msg_id):
+    id_error = message_id_error(msg_id)
+    if id_error is not None:
         raise IngestionError(
             component="ingestion",
-            message=f"row {source_row}: msg_id must match ^M\\d{{2}}$",
+            message=f"row {source_row}: {id_error}",
             path=source,
         )
     if msg_id in seen_ids:
