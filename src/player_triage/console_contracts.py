@@ -59,6 +59,28 @@ class AuditView:
 
 
 @dataclass(frozen=True, slots=True)
+class ImportRunView:
+    """Console-facing summary of one imported run.
+
+    Carries counts, status and the deterministic decision digest only. No
+    message content, player identifier or filesystem path is exposed to the
+    UI layer. ``rejected_rows`` holds the sanitized validation-error report.
+    """
+
+    run_id: str
+    status: str
+    policy_version: str
+    rows_seen: int
+    rows_accepted: int
+    rows_rejected: int
+    rows_processed: int
+    rows_failed: int
+    decision_digest: str
+    model_calls: int
+    rejected_rows: tuple[Mapping[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class VersionView:
     version_id: str
     parent_version_id: str | None

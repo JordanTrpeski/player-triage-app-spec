@@ -154,15 +154,24 @@ def test_pattern_lab_suppresses_synthetic_sensitive_values(app_root: Path) -> No
     assert "441" not in blob
 
 
-def test_streamlit_all_eight_pages_render_without_exception(
+def test_streamlit_all_console_pages_render_without_exception(
     app_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Every console page must render cleanly.
+
+    The list is pinned explicitly rather than counted, so adding or removing a
+    page is a deliberate, reviewable change. Phase 09 added Walkthrough (the
+    landing page) and Import to the original eight.
+    """
+
     monkeypatch.setenv("PLAYER_TRIAGE_APP_ROOT", str(app_root))
     application = app_root / "src" / "player_triage" / "ui" / "app.py"
     rendered = AppTest.from_file(str(application)).run(timeout=60)
     pages = rendered.sidebar.radio[0].options
     assert pages == [
+        "Walkthrough",
         "Dashboard",
+        "Import",
         "Messages",
         "Human Review",
         "Policy Studio",

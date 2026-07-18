@@ -349,10 +349,228 @@ mypy clean, 52 source files; `llama-cpp-python` absent.
 
 ---
 
-## 6. Status
+## 6. Identifier model
 
-Completed: baseline reproduction, `.gitattributes` hardening with fresh-clone
-proof, and the model-governance test correction. Remaining Phase 09 items
-(dependency path, imported identifiers, CSV/XLSX import, batches over 99 rows,
-run isolation, Windows setup and launch, UI and walkthrough, documentation)
-are in progress.
+Two separate contracts.
+
+**Supplied-40 benchmark — unchanged.** `msg_id` matching `^M\d{2}$`, its ground
+truth, its policy validators, its semantic-evaluation generation and its
+canonical digest. The fact that it retains two-digit identifiers is not a
+defect.
+
+**Imported datasets.** `source_message_id` matching `^M[0-9]{1,9}$`, with
+`case_ref` per accepted row and `run_id` per batch. Supplied text is preserved
+exactly; `M1`, `M01` and `M001` remain distinct and are never re-padded.
+
+Ordering is numeric value first, then exact text as a stable tie-break, so `M2`
+precedes `M10` and `M001` precedes `M01` precedes `M1`. That tie-break is
+**deterministic ordering, not semantic precedence** — it exists so repeated
+runs agree, not to rank padded forms.
+
+| Situation | Outcome |
+| --- | --- |
+| `M99` then `M99` | `duplicate_source_message_id` — always an error, every mode |
+| `M99` then `M099`, default | `ambiguous_padded_id_collision` |
+| `M99` then `M099`, `allow` | both accepted |
+| `M1`, `M01`, `M001`, default | first accepted, other two rejected |
+
+`collision_mode=allow` is opt-in and is not the console default.
+
+Import reuses the benchmark's field validation exactly:
+`ingestion._validate_and_build` takes an injectable `message_id_error` callable
+whose default preserves supplied-40 behaviour, so imported and benchmark rows
+cannot diverge on channel, market, language, player-id, length or timestamp
+rules.
+
+Invalid rows are reported as sanitized `ValidationIssue`s and never silently
+dropped. Structural failures (missing or duplicated headers, empty workbook,
+missing file) remain fatal, since no per-row result exists to report.
+
+---
+
+## 7. Imported-run isolation
+
+```
+output/imported_runs/<run_id>/
+    decisions.csv
+    audit.jsonl
+    validation_errors.csv
+    run_manifest.json
+    processing_summary.json
+```
+
+The directory name is the internally generated `run_id` only. No uploaded
+filename, source identifier, player identifier, subject or message content ever
+becomes a path component. An uploaded name is sanitized to a display value for
+the manifest and is never used as a path.
+
+Work happens in an exclusive `.<run_id>.tmp` directory created with
+`mkdir(exist_ok=False)` and renamed atomically into place. An existing
+destination aborts the run: **runs are never overwritten.**
+
+The manifest is written before processing begins and finalized after the output
+files are closed, so an interrupted run leaves `started` on disk rather than a
+truncated success. JSON manifests are written via temporary file plus
+`os.replace`.
+
+Status lifecycle: `started` → `completed` | `completed_with_errors` | `failed`.
+A structural import failure records `failed` and still publishes the evidence
+directory. A per-row operational failure fails only that row; already-processed
+rows are preserved and the failure is reported.
+
+Row accounting is asserted before publication:
+
+```
+rows_accepted + rows_rejected == rows_seen
+rows_processed + rows_failed  == rows_accepted
+```
+
+### Application schemas
+
+Three new schemas, generated from the accepted ones so they cannot structurally
+drift:
+
+| Schema | Role |
+| --- | --- |
+| `imported_decision_schema.json` | engine-internal; identical to `output_schema.json` but with the wider identifier pattern |
+| `imported_output_schema.json` | published record: `source_message_id`, `case_ref`, `run_id`, plus the existing decision fields |
+| `imported_audit_event_schema.json` | imported-run audit correlation |
+
+`schemas/output_schema.json`, `audit_event_schema.json`, the ground-truth
+schemas, the policy schemas and policy-3.3.1 are **unmodified**. These are
+application/input-schema additions, not policy changes. `TriageEngine` gained an
+`output_schema_file` seam defaulting to the accepted contract, and
+`pipeline.ingest_raw` was extracted so import reuses detection, redaction,
+overlays and linkage unchanged.
+
+### Deterministic digest
+
+`imported_decision_digest` covers an explicit allow-list of substantive
+decision fields (`DIGEST_FIELDS`) in numeric-aware canonical order. Timestamps,
+`run_id`, `case_ref`, filesystem paths and durations are excluded, so repeating
+a run over identical input reproduces the digest while a changed decision does
+not. The supplied-40 canonical digest is computed by the separate, unchanged
+`canonical_decision_digest` and remains `a90de550…f70a62b`.
+
+---
+
+## 8. Output-path ruling as implemented
+
+`run --output-dir` still accepts an explicit external path. That behaviour is
+unchanged and remains supported, since it predates Phase 09 and restricting it
+would break an existing workflow.
+
+The application-owned `output/imported_runs/<run_id>/` root is the default and
+the **UI** boundary. The console never offers a server-side destination
+chooser; copies leave via browser downloads. `ConsoleService.read_import_artifact`
+additionally restricts reads by an allow-list of filenames and a `run_id` shape
+check before any path join.
+
+---
+
+## 9. Setup, launch and console
+
+`setup_windows.ps1` (with `setup_windows.bat` for double-click) creates the
+virtual environment, installs `requirements-rules-only.lock`, installs the
+package with `--no-deps`, and health-checks runtime imports, local-model
+absence, `validate-policy` and both validators. `-Dev` switches to
+`requirements-dev.lock`; `-Force` recreates the environment.
+
+Two PowerShell 5.1 specifics were found and handled: `pip show` writes to
+stderr for a missing package, which surfaces as a `NativeCommandError` and
+aborts the script under `$ErrorActionPreference='Stop'` — the local-model check
+is therefore done in Python via `importlib.util.find_spec`.
+
+`run_console.ps1` (with `run_console.bat`) launches the Streamlit console. It
+switches to the repository root, because **Streamlit only reads
+`.streamlit/config.toml` from the working directory**: launched from elsewhere
+it silently discarded the hardened settings, which was observed as usage
+statistics being collected despite `gatherUsageStats = false`. The privacy- and
+safety-relevant settings are now also passed explicitly on the command line.
+Verified by launching the console and confirming HTTP 200 with the telemetry
+message suppressed.
+
+The console gains two pages. **Import** uploads a CSV or XLSX batch, offers the
+opt-in padded-identifier toggle, shows row accounting, surfaces every rejected
+row with sanitized explanations, and provides downloads. **Walkthrough** is a
+six-step orientation for a first-time reviewer and is the default landing page;
+it states the rules-only runtime, why there is no model, the accepted
+benchmark, the imported-identifier model, what a run produces, and what the
+prototype is not.
+
+---
+
+## 10. Status
+
+All Phase 09 implementation items are complete: `.gitattributes` hardening,
+model-governance test portability fix, lock restructure, imported identifier
+model, CSV/XLSX import with reported validation errors, batches over 99 rows,
+run isolation and manifests, Windows setup and launcher, console Import and
+Walkthrough pages, and documentation.
+
+Deliberately not done: merge to `main`, and rebuilding the submission archive.
+
+---
+
+## 11. Final validation battery
+
+| Gate | Result |
+| --- | --- |
+| Default rules-only suite | **450 passed, 1 deselected** |
+| Optional `-m local_model` | **1 skipped** — artifact not staged (expected) |
+| mypy | clean, 55 source files |
+| `validate_policy_package.py` | `POLICY PACKAGE VALID` |
+| `validate_application_spec.py` | `APPLICATION SPEC VALID` |
+| `cli validate-policy` | `POLICY LOAD COMPLETE (expected policy-3.3.1)`, 19 schemas registered |
+| Supplied-40 processed | `input=40 success=40 failure=0 bypass=9` |
+| **Supplied-40 canonical digest** | **`a90de550d29de67c053631d5937eff96ccd27be0d1f56e7843d3b4388f70a62b` — unchanged** |
+| Category agreement | 40/40 |
+| Intent agreement | 39/40, M22 the documented mismatch |
+| Safety gates | 15/15 passed, locked 26/26 |
+| policy-3.3.1 and accepted schemas | zero diff against `70f3eca` |
+| Model calls | 0 |
+| `llama-cpp-python` installed | No |
+| Local-model import at startup | None — CLI, UI and imported-run modules load no `llama*` module |
+| Accepted archive | `5f6bc727…a01f0a` — unchanged, not rebuilt |
+| Clean Windows checkout reproduces hashes | Yes — hostile `core.autocrlf=true` clone, 256/256 files byte-identical, both validators pass |
+| `M001`, `M99`, `M100` accepted on import | Yes |
+| Batches over 99 rows | Yes — 120-row and 250-row batches covered |
+| CSV and XLSX import | Yes, digest-equivalent |
+| Invalid rows reported, not discarded | Yes — row accounting asserted before publication |
+| Runs isolated, never overwritten | Yes |
+
+### Test-count history, stated accurately
+
+| Point | Result |
+| --- | --- |
+| Accepted baseline, clean machine, before correction | 353 passed, 1 environment-dependent failure |
+| After the model-governance correction | 354 passed, 1 deselected |
+| End of Phase 09 | 450 passed, 1 deselected |
+
+Total collected is 451: 450 in the default rules-only suite plus one optional
+`local_model` test. That optional test is **skipped**, never passed, on a
+machine with no approved model artifact — which is the correct and expected
+clean-machine outcome.
+
+One pre-existing test was updated: `test_phase07_console.py` pinned the console
+to exactly eight pages. Phase 09 adds Walkthrough and Import, so the expected
+list was extended to ten and the test renamed. The list remains explicit rather
+than counted, so any future page change stays reviewable.
+
+### Two defects found and fixed during item 8-9 verification
+
+1. **`setup_windows.ps1` aborted on a clean machine.** `pip show` writes to
+   stderr when a package is absent; under Windows PowerShell 5.1 with
+   `$ErrorActionPreference='Stop'` that surfaces as a `NativeCommandError` and
+   killed the script at the local-model check — that is, the check for the
+   *expected* state was fatal. Replaced with `importlib.util.find_spec`.
+
+2. **The console silently discarded its hardened Streamlit configuration.**
+   Streamlit reads `.streamlit/config.toml` from the working directory only, so
+   launching from anywhere else dropped the local-only address, headless mode,
+   XSRF protection, suppressed error details and disabled usage statistics.
+   Observed directly: telemetry was being collected despite
+   `gatherUsageStats = false`. The launcher now switches to the repository root
+   and passes the privacy- and safety-relevant settings explicitly. Verified by
+   launching the console (HTTP 200) and confirming the telemetry message is
+   gone.

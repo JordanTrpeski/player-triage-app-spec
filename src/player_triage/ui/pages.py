@@ -470,8 +470,193 @@ def _agreement_text(document: Mapping[str, Any], field: str) -> str:
     return f"{metric.get('matches', 0)}/{metric.get('total', 0)}"
 
 
+def render_import(service: ConsoleService) -> None:
+    """Upload a CSV or XLSX batch and process it into an isolated run.
+
+    The operator never chooses a server-side destination. Runs are written
+    beneath the application-owned ``output/imported_runs/<run_id>`` root and
+    copies are taken through browser downloads.
+    """
+
+    st.title("Import")
+    st.markdown(
+        '<div class="safe-banner">Imported batches run in rules-only mode. '
+        "The rejected model is never called.</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.caption(
+        "Accepted formats: CSV and XLSX. Identifiers may be M1 through "
+        "M999999999 — padding is preserved exactly, so M1, M01 and M001 stay "
+        "distinct. Rows that fail validation are reported, never silently "
+        "dropped."
+    )
+
+    uploaded = st.file_uploader(
+        "Message batch", type=["csv", "xlsx"], key="import_upload"
+    )
+    allow_padded = st.checkbox(
+        "Accept differently padded identifiers (M99 and M099) as separate rows",
+        value=False,
+        help=(
+            "Off by default. When off, a later identifier that is numerically "
+            "equal to an earlier one is rejected as "
+            "ambiguous_padded_id_collision. Exact duplicates are always an "
+            "error."
+        ),
+        key="import_allow_padded",
+    )
+
+    if uploaded is None:
+        st.info("Choose a file to begin. Nothing is processed until you start the run.")
+        return
+
+    if not st.button("Process batch", type="primary", key="import_run"):
+        return
+
+    try:
+        result = service.run_import(
+            uploaded.getvalue(),
+            display_name=uploaded.name,
+            collision_mode="allow" if allow_padded else "error",
+        )
+    except Exception:
+        st.error(
+            "The import failed safely. No active configuration was changed and "
+            "no partial run was published."
+        )
+        return
+
+    if result.status == "completed":
+        st.success(f"Run {result.run_id} completed — {result.rows_processed} rows.")
+    elif result.status == "completed_with_errors":
+        st.warning(
+            f"Run {result.run_id} completed with errors — "
+            f"{result.rows_processed} processed, {result.rows_rejected} rejected, "
+            f"{result.rows_failed} failed."
+        )
+    else:
+        st.error(f"Run {result.run_id} failed. See the validation report below.")
+
+    columns = st.columns(5)
+    columns[0].metric("Rows seen", result.rows_seen)
+    columns[1].metric("Accepted", result.rows_accepted)
+    columns[2].metric("Rejected", result.rows_rejected)
+    columns[3].metric("Processed", result.rows_processed)
+    columns[4].metric("Failed", result.rows_failed)
+
+    st.caption(
+        f"Policy {result.policy_version} · rules_only · model calls "
+        f"{result.model_calls} · decision digest `{result.decision_digest[:16]}…`"
+    )
+
+    if result.rejected_rows:
+        st.subheader("Rejected rows")
+        st.caption(
+            "Every rejected row appears here. Explanations are sanitized: no "
+            "message content, player identifiers or sensitive values."
+        )
+        st.dataframe(result.rejected_rows, use_container_width=True, hide_index=True)
+
+    st.subheader("Download artifacts")
+    st.caption(
+        "Downloads are the supported way to copy results elsewhere. The "
+        "processing engine does not write outside the application root."
+    )
+    for label, filename in (
+        ("Decisions (CSV)", "decisions.csv"),
+        ("Validation errors (CSV)", "validation_errors.csv"),
+        ("Run manifest (JSON)", "run_manifest.json"),
+        ("Processing summary (JSON)", "processing_summary.json"),
+        ("Audit events (JSONL)", "audit.jsonl"),
+    ):
+        payload = service.read_import_artifact(result.run_id, filename)
+        if payload is None:
+            continue
+        st.download_button(
+            label,
+            data=payload,
+            file_name=f"{result.run_id}-{filename}",
+            key=f"dl-{filename}",
+        )
+
+
+def render_walkthrough(service: ConsoleService) -> None:
+    """Guided tour of the delivered system for a first-time reviewer."""
+
+    st.title("Walkthrough")
+    st.caption(
+        "A five-minute orientation. Nothing on this page changes configuration "
+        "or processes data."
+    )
+
+    overview = service.walkthrough_overview()
+
+    st.markdown(
+        '<div class="safe-banner">Runtime: <b>rules_only</b> · Policy: <b>'
+        f'{overview["policy_version"]}</b> · Model: <b>rejected and '
+        "unavailable</b> · Expected model calls: <b>0</b></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("1. What this system does")
+    st.write(
+        "It triages inbound player contacts into a category and intent, sets a "
+        "priority, routes to a team, decides whether an automated response is "
+        "permitted, and records an auditable reason for every decision. Every "
+        "outcome is produced by deterministic rules."
+    )
+
+    st.subheader("2. Why there is no model")
+    st.write(
+        "A local model was evaluated and rejected: it produced no material "
+        "improvement over the deterministic policy. The delivered runtime is "
+        "rules-only, makes zero model calls, and does not install or import an "
+        "inference runtime."
+    )
+
+    st.subheader("3. The accepted benchmark")
+    st.write(
+        "A supplied set of 40 messages is the accepted regression baseline. It "
+        "keeps its own identifiers (M01–M40) and its own ground truth, and it "
+        "reproduces a fixed canonical decision digest on every run."
+    )
+    st.code(overview["canonical_digest"], language="text")
+    st.caption(
+        f"Category agreement {overview['category_agreement']} · intent "
+        f"agreement {overview['intent_agreement']} · the single documented "
+        "intent mismatch is M22."
+    )
+
+    st.subheader("4. Importing your own data")
+    st.write(
+        "The Import page accepts CSV or XLSX. Imported data is deliberately "
+        "separate from the benchmark: rows carry `source_message_id` "
+        "(`M1`–`M999999999`, padding preserved), each accepted row gets a "
+        "`case_ref`, and each batch gets a `run_id`. Batches larger than 99 "
+        "rows are supported."
+    )
+
+    st.subheader("5. What you get back")
+    st.write(
+        "Each run is isolated in its own directory containing decisions, an "
+        "audit trail, a validation-error report, a run manifest and a "
+        "processing summary. Runs are never overwritten. Invalid rows are "
+        "always reported rather than discarded."
+    )
+
+    st.subheader("6. What this prototype is not")
+    st.write(
+        "There is no production authentication, no multi-user authorization "
+        "and no live integration. It runs locally over synthetic data for "
+        "demonstration and review."
+    )
+
+
 PAGE_RENDERERS: Mapping[str, Callable[[ConsoleService], None]] = {
+    "Walkthrough": render_walkthrough,
     "Dashboard": render_dashboard,
+    "Import": render_import,
     "Messages": render_messages,
     "Human Review": render_human_review,
     "Policy Studio": render_policy_studio,

@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import re
+import tempfile
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Final, Mapping, Sequence
 
 from .configuration_manager import ConfigurationManager
-from .console_contracts import AuditView, DashboardSnapshot, MessageView, VersionView
+from .console_contracts import (
+    AuditView,
+    DashboardSnapshot,
+    ImportRunView,
+    MessageView,
+    VersionView,
+)
 from .errors import ConfigurationError
 from .operational import (
     AUDIT_FILENAME,
@@ -22,6 +31,20 @@ from .routing import load_routing_map
 
 
 _ROUTING = load_routing_map()
+
+
+#: Shape of an internally generated imported-run identifier. Used to reject
+#: crafted values before they are joined to a filesystem path.
+_IMPORT_RUN_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^irun-[0-9A-Za-z]+-[0-9a-f]{12}$"
+)
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        return []
+    with path.open(newline="", encoding="utf-8") as handle:
+        return [dict(row) for row in csv.DictReader(handle)]
 
 
 class ConsoleServiceError(ConfigurationError):
@@ -382,6 +405,114 @@ class ConsoleService:
     def _mismatch_records(self) -> list[dict[str, Any]]:
         path = self.output_root / "mismatch_report.jsonl"
         return _read_jsonl(path) if path.is_file() else []
+
+    # -- imported runs -----------------------------------------------------
+
+    def run_import(
+        self,
+        payload: bytes,
+        *,
+        display_name: str,
+        collision_mode: str = "error",
+    ) -> ImportRunView:
+        """Process an uploaded batch into an isolated, application-owned run.
+
+        The uploaded bytes are staged in a temporary directory that is removed
+        afterwards. The operator never selects a server-side destination: runs
+        are always written beneath ``output/imported_runs``.
+        """
+
+        from .config import load_app_config
+        from .imported_runs import (
+            IMPORTED_RUNS_DIRNAME,
+            VALIDATION_ERRORS_FILENAME,
+            run_imported_batch,
+            sanitize_display_name,
+        )
+
+        safe_name = sanitize_display_name(display_name)
+        suffix = Path(safe_name).suffix.lower()
+        if suffix not in {".csv", ".xlsx"}:
+            raise self._error("import", "unsupported input format")
+
+        config = load_app_config(self.app_root)
+        with tempfile.TemporaryDirectory(prefix="player-triage-import-") as staging:
+            staged = Path(staging) / f"upload{suffix}"
+            staged.write_bytes(payload)
+            result = run_imported_batch(
+                config,
+                staged,
+                display_name=safe_name,
+                collision_mode=collision_mode,
+                # Always the service's own application-owned root, so the
+                # console and its artifact reads agree and the operator never
+                # influences the destination.
+                output_root=self.output_root / IMPORTED_RUNS_DIRNAME,
+            )
+
+        rejected = _read_csv_rows(result.run_dir / VALIDATION_ERRORS_FILENAME)
+        return ImportRunView(
+            run_id=result.run_id,
+            status=result.status,
+            policy_version=result.policy_version,
+            rows_seen=result.rows_seen,
+            rows_accepted=result.rows_accepted,
+            rows_rejected=result.rows_rejected,
+            rows_processed=result.rows_processed,
+            rows_failed=result.rows_failed,
+            decision_digest=result.decision_digest,
+            model_calls=result.model_calls,
+            rejected_rows=tuple(rejected),
+        )
+
+    def read_import_artifact(self, run_id: str, filename: str) -> bytes | None:
+        """Return one artifact from an imported run, or ``None`` if absent.
+
+        ``run_id`` and ``filename`` are both checked against allow-lists so a
+        crafted value cannot read outside the imported-run root.
+        """
+
+        from .imported_runs import (
+            AUDIT_JSONL_FILENAME,
+            DECISIONS_CSV_FILENAME,
+            IMPORTED_RUNS_DIRNAME,
+            PROCESSING_SUMMARY_FILENAME,
+            RUN_MANIFEST_FILENAME,
+            VALIDATION_ERRORS_FILENAME,
+        )
+
+        allowed = {
+            DECISIONS_CSV_FILENAME,
+            AUDIT_JSONL_FILENAME,
+            VALIDATION_ERRORS_FILENAME,
+            RUN_MANIFEST_FILENAME,
+            PROCESSING_SUMMARY_FILENAME,
+        }
+        if filename not in allowed:
+            return None
+        if not _IMPORT_RUN_ID_PATTERN.match(run_id):
+            return None
+
+        root = (self.output_root / IMPORTED_RUNS_DIRNAME).resolve()
+        target = (root / run_id / filename).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            return None
+        return target.read_bytes()
+
+    def walkthrough_overview(self) -> Mapping[str, Any]:
+        """Static orientation facts for the walkthrough page."""
+
+        from .evaluation_service import ACCEPTED_CANONICAL_DIGEST
+
+        settings = self.configuration.settings()
+        return {
+            "policy_version": settings.get("configuration_version", "policy-3.3.1"),
+            "canonical_digest": ACCEPTED_CANONICAL_DIGEST,
+            "category_agreement": "40/40",
+            "intent_agreement": "39/40",
+            "processing_mode": "rules_only",
+            "model_calls": 0,
+        }
 
     @staticmethod
     def _error(component: str, message: str) -> ConsoleServiceError:

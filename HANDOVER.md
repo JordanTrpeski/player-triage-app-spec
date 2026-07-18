@@ -1,171 +1,253 @@
-# Handover — Player Triage App Spec v3 (Phase 02 complete)
+# Handover — Player Contact Triage
 
-Last updated: **2026-07-14**
 Remote: **https://github.com/JordanTrpeski/player-triage-app-spec**
-Branch: **main**
-Most recent commit: **9572e81** — "Complete phase 02 ingestion, normalization, detection, redaction, linkage"
 
-## Where the work stands
+Current work: branch `feature/phase09-import-and-usability`, based on the
+accepted baseline `70f3eca` (Phase 08).
 
-Three phases are done. Phase 03 is the next prompt to paste.
+> **Historical note.** Earlier revisions of this file described the Phase 02
+> state (dated 2026-07-14, commit `9572e81`, "125 passed", "16 source files",
+> `pip install -r requirements-lock.txt`). Those statements were accurate then
+> and are preserved in `docs/phase_reports/phase_01.md` and
+> `docs/phase_reports/phase_02.md`. They no longer describe this repository —
+> do not follow them.
 
-| Phase | Status | Commit | Report |
-| --- | --- | --- | --- |
-| 00 — Repository & policy audit | complete | `df38616` | [docs/phase_reports/phase_00.md](docs/phase_reports/phase_00.md) |
-| 01 — Scaffold, config loaders, CLI skeleton | complete | `e003ccf` | [docs/phase_reports/phase_01.md](docs/phase_reports/phase_01.md) |
-| 02 — Ingestion, normalization, detection, redaction, linkage | complete | `9572e81` | [docs/phase_reports/phase_02.md](docs/phase_reports/phase_02.md) |
-| 03 — Deterministic policy engine & rules-only baseline | **not started** | — | prompt: [coding_runbook/prompts/03_rules_engine.md](coding_runbook/prompts/03_rules_engine.md) |
-| 04–08 | not started | — | prompts under [coding_runbook/prompts/](coding_runbook/prompts/) |
+---
 
-## Setup on the new device
+## 1. What this is
 
-Prerequisites:
+A local, provider-independent prototype that triages inbound player contacts.
+Every decision is produced by deterministic rules.
 
-- **Python 3.12.x** (pinned; the project requires `>=3.12,<3.13`). Verify with `python --version`.
-- `git`.
-- Any OS. Development so far has been on Windows 11 with Git Bash + PowerShell; the code is portable.
+| Property | Value |
+| --- | --- |
+| Runtime | `rules_only` |
+| Active policy | `policy-3.3.1` |
+| Model | evaluated in Phase 04 and **rejected** — disabled and unavailable |
+| Expected model calls | **0** |
+| Supplied-40 canonical digest | `a90de550d29de67c053631d5937eff96ccd27be0d1f56e7843d3b4388f70a62b` |
+| Accepted archive | `player-contact-triage-submission.zip`, SHA-256 `5f6bc727191c573336068d75621bd7f50ce684ec3a814208db3fd36008a01f0a` |
 
-Clone and bootstrap:
+The application must run, and the full default test suite must pass, **without**
+`llama-cpp-python` and **without** any GGUF artifact.
 
-```bash
+---
+
+## 2. Clean-machine setup (Windows, PowerShell 5.1)
+
+```powershell
 git clone https://github.com/JordanTrpeski/player-triage-app-spec.git
 cd player-triage-app-spec
-
-python -m venv .venv
-# Windows:
-.venv/Scripts/python.exe -m pip install --upgrade pip
-.venv/Scripts/python.exe -m pip install --editable ".[dev]"
-# macOS/Linux:
-# .venv/bin/python -m pip install --upgrade pip
-# .venv/bin/python -m pip install --editable ".[dev]"
+.\setup_windows.ps1          # add -Dev for pytest + mypy
 ```
 
-If you need identical transitive versions to the ones I've been running, use the lock file:
+`setup_windows.ps1` creates `.venv`, installs the pinned rules-only lock,
+installs the package with `--no-deps`, and runs a health check (runtime
+imports, no local-model import, `validate-policy`, both validators).
 
-```bash
-.venv/Scripts/python.exe -m pip install -r requirements-lock.txt
-.venv/Scripts/python.exe -m pip install --editable . --no-deps
+### Line endings — read this before anything else
+
+The configuration manifest pins SHA-256 digests over exact file bytes. A
+Windows clone with `core.autocrlf=true` and no `.gitattributes` rewrites line
+endings, every hashed configuration file changes hash, and you get
+`configuration hash mismatch` plus hundreds of test errors.
+
+`.gitattributes` now prevents this. If you meet the symptom on an older clone,
+note that **`git reset --hard HEAD` does not fix it** — Git's stat cache treats
+the files as unchanged, so the reset silently does nothing. The working repair:
+
+```powershell
+git config core.autocrlf false
+git ls-files | ForEach-Object { Remove-Item -LiteralPath $_ -Force -ErrorAction SilentlyContinue }
+git checkout -- .
 ```
 
-## Verify the environment (should all pass on a clean clone)
+Fifteen tracked files were committed with CRLF or mixed endings and several are
+hash-pinned by policy-3.3.1. They are pinned `-text` and must not be
+normalized. See `docs/phase_09.md` §2.
 
-```bash
-.venv/Scripts/python.exe -m pytest -q
-.venv/Scripts/python.exe -m mypy --config-file pyproject.toml
-.venv/Scripts/python.exe tools/validate_policy_package.py
-.venv/Scripts/python.exe tools/validate_application_spec.py
-.venv/Scripts/python.exe -m player_triage.cli validate-policy
-.venv/Scripts/python.exe -m player_triage.cli ingest
+### Dependencies
+
+| File | Use |
+| --- | --- |
+| `requirements-rules-only.lock` | the delivered runtime (CLI + Streamlit UI + CSV/XLSX import + validation) |
+| `requirements-dev.lock` | rules-only + pytest + mypy |
+| `requirements-local-model.lock` | **optional**, rejected local-model runtime — never for normal setup |
+| `requirements-lock.txt` | **superseded**, comment-only, retained for audit |
+
+The old `requirements-lock.txt` installed the rejected model runtime while
+omitting Streamlit entirely; it could not reproduce the delivered application.
+
+---
+
+## 3. Simple launch
+
+```powershell
+.\run_console.ps1              # http://127.0.0.1:8501
+.\run_console.ps1 -Port 8600 -NoBrowser
 ```
 
-Expected:
+`run_console.bat` and `setup_windows.bat` are double-click wrappers.
 
-- `pytest`: **125 passed**.
-- `mypy`: **Success: no issues found in 16 source files**.
-- `tools/validate_policy_package.py`: `POLICY PACKAGE VALID`.
-- `tools/validate_application_spec.py`: `APPLICATION SPEC VALID — NO MATERIAL CONTRACT GAPS DETECTED`.
-- `validate-policy` CLI: reports 17 policy components + 14 schemas, ends `POLICY LOAD COMPLETE`.
-- `ingest` CLI: 40 sanitized lines, ends `INGEST COMPLETE`; no player IDs and no fixture PAN/CVV strings in stdout.
+The launcher switches to the repository root so `.streamlit/config.toml`
+applies (local-only address, headless, XSRF protection, suppressed error
+details, no usage statistics) and passes those settings explicitly as well.
 
-If any of these fail on a fresh clone, treat it as a blocker before starting Phase 03 — regressions this early usually point at an environment mismatch (Python version, line endings, or a package that resolved to a different transitive version).
+---
 
-## Repository map
+## 4. Application entry points
+
+| Entry point | Purpose |
+| --- | --- |
+| `python -m player_triage.cli` / `player-triage` | Typer CLI |
+| `python -m player_triage` | same, via `__main__` |
+| `src/player_triage/ui/app.py` | Streamlit console (launch via `run_console.ps1`) |
+
+CLI commands: `validate-policy`, `ingest`, `run`, `override`, `evaluate`,
+`evaluate-semantic`, `demo`, `kill-switch`.
+
+Console pages: Walkthrough, Dashboard, Import, Messages, Human Review, Policy
+Studio, Evaluation, Audit Explorer, Configuration Versions, Settings.
+
+---
+
+## 5. Identifier model
+
+Two deliberately separate contracts.
+
+**Supplied-40 benchmark — unchanged.** `msg_id` matching `^M\d{2}$` (M01–M40),
+its own ground truth, its own policy validators, its own canonical digest.
+
+**Imported datasets.** `source_message_id` matching `^M[0-9]{1,9}$`, plus
+`case_ref` (per accepted row) and `run_id` (per batch). The supplied text is
+preserved exactly — `M1`, `M01` and `M001` are three distinct identifiers and
+are never re-padded.
+
+Ordering is numeric-aware: numeric value first, then exact text as a stable
+tie-break. `M2` sorts before `M10`; `M001` sorts before `M01` before `M1`. That
+tie-break is **deterministic ordering, not semantic precedence**.
+
+Within one batch:
+
+| Situation | Outcome |
+| --- | --- |
+| `M99` then `M99` | `duplicate_source_message_id` (always an error) |
+| `M99` then `M099`, default mode | `ambiguous_padded_id_collision` |
+| `M99` then `M099`, `collision_mode=allow` | both accepted |
+| `M1`, `M01`, `M001`, default mode | first accepted, other two rejected |
+
+`collision_mode=allow` is opt-in; the console defaults to strict.
+
+---
+
+## 6. Import workflow
+
+Console → **Import** → upload CSV or XLSX → optionally allow padded variants →
+**Process batch**.
+
+Invalid rows are **reported, never silently discarded**. Structural failures
+(bad headers, empty workbook) fail the run rather than reporting per row.
+
+Copies leave the machine via browser downloads. The operator never selects a
+server-side destination.
+
+---
+
+## 7. Run isolation
 
 ```
-policy/           Frozen Stage-9 policy contract (immutable — see rules below)
-schemas/          JSON Schemas (immutable)
-input/            Authoritative dataset (CSV + XLSX, both 40 rows)
-tools/            Pre-existing validators
-coding_runbook/   Phase prompts + operating rules
-docs/
-  app/            Application requirements / architecture / UI / schema / export contracts
-  phase_reports/  One report per completed phase
-src/player_triage/
-  __init__.py     Package version marker
-  __main__.py     Enables `python -m player_triage`
-  cli.py          Typer app: validate-policy, ingest, run/evaluate/demo/kill-switch (last four exit 2 until later phases wire them up)
-  config.py       Typed loaders, ControlledVocabularies, AppConfig
-  errors.py       Sanitized error hierarchy
-  paths.py        App-root discovery (never uses os.getcwd)
-  schema.py       Draft 2020-12 registry with cross-ref support
-  records.py      Frozen dataclasses; only RawMessage carries player_id
-  ingestion.py    CSV + XLSX loaders with strict validation
-  normalization.py NFC + whitespace + line-ending; norm-1.0.0
-  detection.py    Policy-driven detector engine (Luhn on PAN, prompt injection, etc.)
-  redaction.py    Idempotent placeholder substitution + reference flags
-  eligibility.py  Ingestion-level 6-state gate
-  linkage.py      Same-player follow-up + shared-reference linkage
-  overlays.py     Market overlay lookup
-  pipeline.py     Phase 02 orchestrator → tuple[IngestedMessage, ...]
-tests/            125 tests covering Phase 01 + Phase 02
-pyproject.toml    Python >=3.12,<3.13; pinned direct deps; dev + local_model extras
-requirements-lock.txt  Full transitive lock snapshot
-.gitignore        Excludes .venv/, __pycache__/, .mypy_cache/, .pytest_cache/
+output/imported_runs/<run_id>/
+    decisions.csv
+    audit.jsonl
+    validation_errors.csv
+    run_manifest.json
+    processing_summary.json
 ```
 
-## Operating rules that must be preserved
+The directory name is the internally generated `run_id` only — never the
+uploaded filename, a source identifier, a player identifier or message content.
+Work happens in an exclusive `.<run_id>.tmp` directory renamed atomically into
+place; an existing destination aborts the run. **Runs are never overwritten.**
 
-These live in [coding_runbook/agent_operating_rules.md](coding_runbook/agent_operating_rules.md). Summary of what has been most load-bearing in Phases 00–02:
+The manifest is written before processing and finalized after the output files
+close, so an interrupted run leaves `started` rather than a false success.
 
-1. **`policy/` and `schemas/` are immutable.** No implementation phase changes them. If a validator flags an objective serialization/reference defect, document a proposed minimal fix and stop for user approval instead of editing.
-2. **Never echo raw player messages, PAN/CVV, identity numbers, OTPs, or player IDs** in chat output, logs, tests, or documentation. Tests that need positive coverage of a detector use synthetic content (e.g. the industry test PAN `4111 1111 1111 1111`), not dataset values.
-3. **No external LLM APIs, no dataset upload.** Runtime is local/provider-independent. Internet is only for dependency install and official docs.
-4. **Never implement real account/payment/KYC/self-exclusion/regulator/communication integrations.**
-5. **One phase at a time.** Stop after each phase report; wait for the user to paste the next prompt.
-6. **Fail closed.** Invalid input, redaction uncertainty, schema failure, or model outage routes to human/specialist fallback.
+Status: `started` → `completed` | `completed_with_errors` | `failed`.
 
-## Design invariants worth knowing on day 1
+Guaranteed before publication:
 
-- **Enum single-source rule** — `policy/controlled_vocabularies.json` is the only place classification-decision catalogues (categories, intents, routes, priorities, teams, auto-response policies, template IDs) may be spelled out. `tests/test_no_enum_duplication.py` enforces this by scanning `src/player_triage/*.py`. Output catalogues that mechanically surface in ingestion/detection code (risk flags, eligibility states, bypass reasons, overlay codes) are exempted — see the docstring at the top of that test.
-- **`player_id` boundary** — only `RawMessage` carries it. Every downstream type (`NormalizedMessage`, `DetectionResult`, `IngestedMessage`, `LinkageResult`, etc.) is player-ID-free by construction. If you add code that needs `player_id`, keep it inside `ingestion.py` or `linkage.py`.
-- **Detection results carry counts and placeholders, never matched values.** Assertions and CLI output check ID + boolean + count only.
-- **Redaction is idempotent** — `redact(redact(text)) == redact(text)`. A test enforces this on synthetic content and on every one of the 40 real records.
-- **App root discovery is independent of cwd** — `resolve_app_root()` in `paths.py` walks up from the package directory or reads `PLAYER_TRIAGE_APP_ROOT`. Tests confirm the pipeline runs from a foreign cwd.
-- **No network during ingestion** — `tests/test_no_network_and_sanitized.py` patches `socket.socket` and `socket.create_connection` to raise and asserts the full pipeline still completes.
-
-## What Phase 03 is going to touch
-
-Read [coding_runbook/prompts/03_rules_engine.md](coding_runbook/prompts/03_rules_engine.md) before starting. Expected additions (do **not** implement yet):
-
-- A deterministic policy engine that consumes `policy/policy_rules.json` and `policy/baseline_intent_rules.json`.
-- Applies the pre-model, terminal, locked rules (self-harm, PCI, prompt injection, underage, self-exclusion, …) that are already validated by Phase 02's detectors.
-- Emits every field of `schemas/output_schema.json` — categories, intents, priorities, routes, teams, template IDs, reason codes, model_eligibility, bypass reasons, risk_flags, market overlays, related_message_ids, first_contact_message_id, previous_contact_count, market_applicability_note, short_rationale.
-- Passes the 40 terminal outputs and all safety assertions in `policy/safety_assertions.json` (S01–S15).
-- Runs in `rules_only` mode without any model. Adds `run` / `evaluate` behind those CLI commands.
-
-The 125 existing tests must stay green. Phase 03 additions should extend the suite.
-
-## Everyday commands
-
-```bash
-# From the repo root, with .venv activated (or using .venv/Scripts/python.exe explicitly):
-
-# Configuration sanity
-.venv/Scripts/python.exe -m player_triage.cli validate-policy
-
-# Full Phase 02 pipeline preview (sanitized output)
-.venv/Scripts/python.exe -m player_triage.cli ingest
-
-# Full test suite
-.venv/Scripts/python.exe -m pytest -q
-
-# Static type check
-.venv/Scripts/python.exe -m mypy --config-file pyproject.toml
-
-# Existing package/application validators (pre-Phase-01)
-.venv/Scripts/python.exe tools/validate_policy_package.py
-.venv/Scripts/python.exe tools/validate_application_spec.py
+```
+rows_accepted + rows_rejected == rows_seen
+rows_processed + rows_failed  == rows_accepted
 ```
 
-## What to do if something looks off
+The imported decision digest covers substantive decision fields only —
+timestamps, `run_id`, `case_ref`, paths and durations are excluded — so
+repeating a run over identical input reproduces the digest.
 
-- **`pytest` fails on a fresh clone** — the environment is probably not what the project targets. Check `python --version` is 3.12.x, delete `.venv`, and reinstall with `pip install --editable ".[dev]"`. If it still fails, use `pip install -r requirements-lock.txt` to force the exact transitive graph and reinstall the project with `--no-deps`.
-- **`tools/validate_policy_package.py` fails** — treat this as a Phase 00 regression, not something to work around. Something in `policy/`, `schemas/`, or `input/` has been touched. Restore from git (`git status`, `git checkout -- <path>`) before doing anything else.
-- **A new test wants to reference a real message** — do so by `msg_id` and boolean/enum/count only. Never paste subject/body/player_id/PAN/CVV values into test source.
-- **You need to install a new package** — add it to `pyproject.toml` (runtime deps or `[project.optional-dependencies].dev`), reinstall, refresh `requirements-lock.txt` via `pip freeze --exclude-editable > requirements-lock.txt`, commit both files.
+### CLI output paths
 
-## Contact / provenance
+`run --output-dir` still accepts an explicit external path; that behaviour is
+unchanged and remains supported. The application-owned root is the default and
+the UI boundary, not a new restriction on the CLI.
 
-- Frozen spec bundle version: **policy-3.0.0** (from `policy/configuration_manifest.json`).
-- Assistant used to build Phases 00–02: Claude Code (Opus 4.7).
-- All prior conversation context is captured in the phase reports; you don't need the chat transcript to continue.
+---
+
+## 8. Validation commands
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q                                 # default rules-only suite
+.\.venv\Scripts\python.exe -m pytest -q -m local_model -o addopts="-ra" # optional; skips without an artifact
+.\.venv\Scripts\python.exe -m mypy --config-file pyproject.toml
+.\.venv\Scripts\python.exe tools\validate_policy_package.py
+.\.venv\Scripts\python.exe tools\validate_application_spec.py
+.\.venv\Scripts\python.exe -m player_triage.cli validate-policy
+.\.venv\Scripts\python.exe -m player_triage.cli run --mode rules_only   # must print the canonical digest
+.\.venv\Scripts\python.exe -m player_triage.cli evaluate
+```
+
+Expected: **450 passed, 1 deselected**; mypy clean across 55 source files;
+`POLICY PACKAGE VALID`; `APPLICATION SPEC VALID`; 19 schemas registered;
+supplied-40 `40/40 processed`, `category 40/40`, `intent 39/40` with M22 the
+documented mismatch; safety gates `15/15` and locked `26/26`.
+
+The one `local_model` test is **skipped**, not passed, when no artifact is
+staged. That is the expected clean-machine result.
+
+---
+
+## 9. Known gaps
+
+**Missing external artifacts — packaging prerequisites, not blockers.** Not
+recreated; to be transferred before final packaging:
+
+- `Player_Contact_Triage_Decision_Log_Simple_2_Page.pdf` / `.docx`
+- `Player_Contact_Triage_Audit_Decision_Log.pdf` / `.docx`
+
+`docs/decision_log_outline.md` and `submission/DECISION_LOG.md` are different
+artifacts and are not substitutes.
+
+**Synthetic-consistency v2 — descoped.** The corrected v2 artifacts
+(`synthetic_consistency_expectations_v2.json` / `.csv`,
+`synthetic_fixture_audit.json`, `synthetic_comparison_v2.json`,
+`compare_synthetic_results_v2.py`) are not present in the accepted repository
+or any available remote branch. Phase 09 did not use or recreate them. The
+supplied-40 baseline, official safety gates, existing holdouts and the full
+regression suite remain the release gates.
+
+**Not rebuilt.** The accepted submission archive is untouched and must stay
+that way until packaging is authorized.
+
+---
+
+## 10. Phase 09 status
+
+Complete: `.gitattributes` hardening, model-governance test portability fix,
+lock restructure, imported identifier model, CSV/XLSX import with reported
+validation errors, batches over 99 rows, run isolation and manifests, Windows
+setup and launcher, console Import and Walkthrough pages, documentation.
+
+Deliberately not done: merge to `main`, submission archive rebuild.
+
+Full detail, including incident records and the reasoning behind each decision,
+is in `docs/phase_09.md`.
