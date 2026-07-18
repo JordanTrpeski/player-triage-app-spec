@@ -151,11 +151,22 @@ Invalid rows are **reported, never silently discarded**. Structural failures
 Copies leave the machine via browser downloads. The operator never selects a
 server-side destination.
 
+The Import page provides: a **downloadable CSV template**, a **pre-processing
+preview** (sanitized filename, detected format, row count, detected columns,
+first few rows), **visible processing status** (validating → creating run →
+processing rows → writing outputs → completed/failed), the **completed-run
+summary**, **downloads** for all five artifacts, and a **recent-runs view** with
+safe metadata and re-download of past runs.
+
 ### Fixed column contract
 
-There is **no column mapping UI**. The importer requires exactly these nine
-columns, by name, in the header row. Missing columns, duplicated columns and
-unexpected extra columns are all rejected as structural failures.
+> Phase 09 uses a fixed import contract rather than user-defined column
+> mapping. This reduces ambiguity, makes validation deterministic and provides a
+> reproducible template for the live demonstration.
+
+This is a deliberate design decision, not an omitted feature. The importer
+requires exactly these nine columns, by name, in the header row. Missing,
+duplicated and unexpected columns are all rejected as structural failures.
 
 | Column | Rule |
 | --- | --- |
@@ -169,19 +180,24 @@ unexpected extra columns are all rejected as structural failures.
 | `subject` | at most 300 characters; subject and body cannot both be empty |
 | `body` | at most 8,000 characters |
 
-`input/dataset_player_messages.csv` is a valid example of this layout and can be
-used as a reference template. **No downloadable template is offered in the UI.**
+Download the template from the Import page ("Download CSV template"). It
+contains the header row plus one clearly synthetic example row using the
+imported identifier form `M1` and the placeholder player `P-00000`, and no real
+or sensitive data. Delete or replace the example row before importing.
+
+Note that the template targets the **import** path. The strict supplied-40
+benchmark loader rejects `M1` by design, since the benchmark keeps `^M\d{2}$`.
 
 ### Batch size limit
 
-The configured maximum is **`MAX_IMPORT_ROWS = 100,000`** rows per file, defined
-in `src/player_triage/import_ingestion.py`. Input above the limit fails during
-loading, before any row is classified: the run is recorded as `failed`, no rows
-are processed, and the manifest carries the sanitized reason
-`imported file exceeds 100000 rows`.
+The approved maximum is **`MAX_IMPORT_ROWS = 10,000`** rows per file, defined in
+`src/player_triage/import_ingestion.py`. Exactly 10,000 is accepted. Input above
+the limit fails during loading, **before any row is classified**: the run is
+recorded as `failed`, `rows_processed` is 0, `model_calls` is 0, and the
+manifest carries the sanitized reason `imported file exceeds 10000 rows`.
 
 Verified sizes: 1, 40, 99, 100, 101, 900, 1,000 and 10,000 rows all complete
-with correct accounting and zero model calls; 100,001 rows fails before
+with correct accounting and zero model calls; 10,001 rows fails before
 processing. Approximate wall-clock on the development machine: 900 rows ≈ 11 s,
 10,000 rows ≈ 121 s. Engineering evidence only — not a throughput guarantee.
 

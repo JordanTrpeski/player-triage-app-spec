@@ -6,10 +6,12 @@ enough to assert on every suite run, so a regression at the two- to
 three-digit transition — where a two-digit identifier assumption would break —
 fails automatically.
 
-The very large sizes (10,000 and the 100,001-row over-limit case) are not run
+The at-limit (10,000) and over-limit (10,001) cases are not run at full size
 here: generating and classifying them takes minutes and would dominate the
 suite. The limit itself is exercised by monkeypatching MAX_IMPORT_ROWS down,
-which tests the same code path deterministically and in milliseconds.
+which tests the same code path deterministically and in milliseconds. Full-size
+10,000 acceptance and 10,001 rejection are verified by controlled run and
+recorded in docs/phase_09.md.
 """
 
 from __future__ import annotations
@@ -80,10 +82,10 @@ def test_three_digit_transition_runs_end_to_end(tmp_path: Path, app_root: Path, 
     assert result.model_calls == 0
 
 
-def test_configured_limit_is_documented_value() -> None:
-    """Pin the limit so a change is deliberate and shows up in review."""
+def test_configured_limit_is_the_approved_value() -> None:
+    """Pin the approved Phase 09 limit so a change is deliberate and reviewable."""
 
-    assert MAX_IMPORT_ROWS == 100_000
+    assert MAX_IMPORT_ROWS == 10_000
 
 
 def test_at_limit_is_accepted_and_over_limit_fails_before_processing(

@@ -428,15 +428,10 @@ rows_processed + rows_failed  == rows_accepted
 ### Application schemas
 
 The imported schemas were initially derived programmatically from the accepted
-schemas to reduce accidental structural divergence.
-
-**This is a one-time derivation, not an enforced invariant.** No automated
-compatibility test currently verifies that the imported schemas keep every
-required accepted decision field, that only the approved identifier and
-correlation fields differ, or that a future change to the accepted output
-structure fails loudly. A future edit to `output_schema.json` would therefore
-**not** cause an explicit compatibility-test failure. Adding such a test is a
-recommended follow-up; it is out of scope for the Phase 09 closeout audit.
+schemas to reduce accidental structural divergence. That derivation is now
+**enforced by `tests/test_phase09_schema_compatibility.py`**, which fails if the
+imported and accepted contracts diverge — see §12 for the precise scope of what
+that test does and does not guarantee.
 
 The three schemas:
 
@@ -580,24 +575,86 @@ changed application behaviour.
    reproduced, `setup_windows.ps1` completing, launcher serving HTTP 200 with
    hardened settings active.
 
-2. **The configured row limit is 100,000, not 10,000.** `MAX_IMPORT_ROWS` in
-   `src/player_triage/import_ingestion.py` has always been `100_000`. No
-   document claimed 10,000; the limit was simply undocumented. It is now stated
-   in `HANDOVER.md` §6 and pinned by a test. **The value itself was not changed**
-   — altering it would be a behaviour change, which the audit prohibits. If
-   10,000 is the intended operational limit, that is a one-line change plus a
-   test update, and it needs an explicit decision.
+2. **The configured row limit was 100,000, not the approved 10,000.**
+   `MAX_IMPORT_ROWS` had always been `100_000` and no document stated a limit at
+   all. The audit reported the discrepancy without changing the value, since
+   that would have been a behaviour change. **Subsequently corrected to
+   `10_000`** on the approved requirement `max_batch_rows = 10,000`: exactly
+   10,000 is accepted, 10,001 fails during loading before any classification,
+   with `rows_processed = 0` and `model_calls = 0`. The value is pinned by a
+   test and documented in `HANDOVER.md` §6.
 
-3. **No automated schema-compatibility test exists.** The claim that the
+3. **No automated schema-compatibility test existed.** The claim that the
    imported schemas "cannot structurally drift" was not enforced by anything.
-   The wording is corrected above, and the gap is recorded as a recommended
-   follow-up rather than silently implied to be covered.
+   The wording was corrected first; **an enforcing test was subsequently added**
+   (`tests/test_phase09_schema_compatibility.py`). See §12.
 
 4. **Batch-size boundaries had no automated coverage.** Only 120- and 250-row
    cases existed. `tests/test_phase09_batch_sizes.py` now pins 1, 40, 99, 100
    and 101 rows end to end, the configured limit value, and the at-limit /
    over-limit paths (via a small stand-in limit, so the real code path is
-   exercised in milliseconds rather than by generating 100,001 rows).
+   exercised in milliseconds rather than by generating an over-limit file).
+
+## 12. Post-audit corrective patch
+
+Four scoped corrections applied after the closeout audit. No classification or
+policy behaviour changed; policy-3.3.1 and the accepted schemas remain
+untouched.
+
+### 12.1 Maximum import size corrected to 10,000
+
+`MAX_IMPORT_ROWS` changed from `100_000` to the approved `10_000`. Exactly
+10,000 rows is accepted; 10,001 fails during loading, before classification
+begins, leaving `rows_processed = 0` and `model_calls = 0` with the sanitized
+reason `imported file exceeds 10000 rows`. Documentation and tests updated to
+match; the value is pinned by `test_configured_limit_is_the_approved_value`.
+
+### 12.2 Import UI completed
+
+| Feature | Implementation |
+| --- | --- |
+| Downloadable CSV template | Header row plus one synthetic example (`M1`, `P-00000`, "EXAMPLE ROW"). No real or sensitive data. Verified to round-trip through the importer. |
+| Input preview | Sanitized filename, detected format, row count, detected columns, missing/unexpected column report, and the first few rows — **before** processing. Bodies are never shown; subjects truncate at 48 characters; `player_id` is not surfaced. Warns when the row count exceeds the limit. |
+| Processing status | `st.status` panel stepping through validating file → creating run and processing N rows → writing outputs → completed/failed, so a 10,000-row run (~2 minutes) never looks frozen. |
+| Recent runs | Manifest metadata only — run_id, status, times, sanitized source name, counts, policy version, digest prefix. Any listed run can be reopened and its artifacts re-downloaded through the existing allow-listed mechanism. Corrupt manifests are skipped rather than breaking the list. |
+
+### 12.3 Column mapping — deliberate design decision
+
+> Phase 09 uses a fixed import contract rather than user-defined column
+> mapping. This reduces ambiguity, makes validation deterministic and provides a
+> reproducible template for the live demonstration.
+
+Recorded as a decision, not an omission. The nine-column contract and its
+validation rules are documented in `HANDOVER.md` §6.
+
+### 12.4 Schema-compatibility enforcement
+
+`tests/test_phase09_schema_compatibility.py` enforces that:
+
+- every accepted decision property survives into `imported_output_schema.json`,
+  and no extra field appears there;
+- `imported_decision_schema.json` matches the accepted property and required
+  sets exactly;
+- shared property definitions are identical once the legitimately widened
+  identifier patterns are normalized — so a retyped or re-enumerated accepted
+  field fails loudly;
+- `source_message_id`, `case_ref` and `run_id` carry their imported-run
+  definitions and are required;
+- the accepted output, audit, ground-truth, policy, baseline, redaction and
+  detection schemas still constrain identifiers to `^M\d{2}$` and have **not**
+  been widened with the imported pattern or gained imported-run fields.
+
+**Scope, stated precisely.** These tests enforce structural alignment between
+the imported and accepted contracts, and prevent the accepted contract being
+edited to accommodate imports. They cannot prevent someone deliberately editing
+both sides together. Drift is detected, not made impossible.
+
+Nested identifier references (`related_message_ids`,
+`first_contact_message_id`) are legitimately widened in the imported schemas;
+the comparison normalizes those patterns so that any *other* difference is
+reported as drift.
+
+---
 
 ### Two defects found and fixed during item 8-9 verification
 

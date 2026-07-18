@@ -11,6 +11,7 @@ import streamlit as st
 from player_triage.configuration_manager import ConfigurationManager
 from player_triage.console_contracts import MessageView
 from player_triage.console_service import ConsoleService
+from player_triage.import_ingestion import MAX_IMPORT_ROWS
 from player_triage.pattern_lab import FIXTURES, run_pattern_lab
 
 
@@ -492,6 +493,22 @@ def render_import(service: ConsoleService) -> None:
         "dropped."
     )
 
+    st.download_button(
+        "Download CSV template",
+        data=service.import_template_csv(),
+        file_name="player_triage_import_template.csv",
+        help=(
+            "Fixed nine-column contract with one synthetic example row. "
+            "Replace or delete the example before importing."
+        ),
+        key="import_template",
+    )
+    st.caption(
+        "Phase 09 uses a fixed import contract rather than user-defined column "
+        "mapping. This reduces ambiguity, makes validation deterministic and "
+        "provides a reproducible template for the live demonstration."
+    )
+
     uploaded = st.file_uploader(
         "Message batch", type=["csv", "xlsx"], key="import_upload"
     )
@@ -509,22 +526,74 @@ def render_import(service: ConsoleService) -> None:
 
     if uploaded is None:
         st.info("Choose a file to begin. Nothing is processed until you start the run.")
+        _render_recent_runs(service)
         return
+
+    payload = uploaded.getvalue()
+
+    # --- preview: structure only, before anything is processed ---------------
+    st.subheader("Preview")
+    try:
+        preview = service.preview_import(payload, display_name=uploaded.name)
+    except Exception:
+        st.error("The uploaded file could not be read. Check the format and try again.")
+        _render_recent_runs(service)
+        return
+
+    info = st.columns(3)
+    info[0].metric("Rows detected", preview.row_count)
+    info[1].metric("Format", preview.detected_format.upper())
+    info[2].metric("Columns", len(preview.detected_columns))
+    st.caption(f"File: `{preview.display_name}`")
+
+    if preview.columns_ok:
+        st.success("Column contract satisfied.")
+    else:
+        if preview.missing_columns:
+            st.error(f"Missing required columns: {', '.join(preview.missing_columns)}")
+        if preview.unexpected_columns:
+            st.error(f"Unexpected columns: {', '.join(preview.unexpected_columns)}")
+        st.caption("Fix the header row, or start from the CSV template above.")
+
+    if preview.row_count > MAX_IMPORT_ROWS:
+        st.error(
+            f"This file has {preview.row_count:,} rows, above the {MAX_IMPORT_ROWS:,}-row "
+            "limit. Split it into smaller batches. Processing would fail before "
+            "any row was classified."
+        )
+
+    if preview.sample_rows:
+        st.caption(
+            f"First {len(preview.sample_rows)} row(s). Subjects are truncated and "
+            "message bodies are never shown here."
+        )
+        st.dataframe(preview.sample_rows, use_container_width=True, hide_index=True)
 
     if not st.button("Process batch", type="primary", key="import_run"):
+        _render_recent_runs(service)
         return
 
+    # --- processing: visible status so a large run never looks frozen -------
     try:
-        result = service.run_import(
-            uploaded.getvalue(),
-            display_name=uploaded.name,
-            collision_mode="allow" if allow_padded else "error",
-        )
+        with st.status("Processing batch…", expanded=True) as status:
+            st.write("Validating file…")
+            st.write(f"Creating run and processing {preview.row_count:,} row(s)…")
+            result = service.run_import(
+                payload,
+                display_name=uploaded.name,
+                collision_mode="allow" if allow_padded else "error",
+            )
+            st.write("Writing outputs…")
+            if result.status == "failed":
+                status.update(label="Run failed", state="error")
+            else:
+                status.update(label="Completed", state="complete")
     except Exception:
         st.error(
             "The import failed safely. No active configuration was changed and "
             "no partial run was published."
         )
+        _render_recent_runs(service)
         return
 
     if result.status == "completed":
@@ -558,27 +627,98 @@ def render_import(service: ConsoleService) -> None:
         )
         st.dataframe(result.rejected_rows, use_container_width=True, hide_index=True)
 
+    _render_run_downloads(service, result.run_id, key_prefix="current")
+    _render_recent_runs(service)
+
+
+_RUN_ARTIFACTS: tuple[tuple[str, str], ...] = (
+    ("Decisions (CSV)", "decisions.csv"),
+    ("Validation errors (CSV)", "validation_errors.csv"),
+    ("Run manifest (JSON)", "run_manifest.json"),
+    ("Processing summary (JSON)", "processing_summary.json"),
+    ("Audit events (JSONL)", "audit.jsonl"),
+)
+
+
+def _render_run_downloads(
+    service: ConsoleService, run_id: str, *, key_prefix: str
+) -> None:
     st.subheader("Download artifacts")
     st.caption(
         "Downloads are the supported way to copy results elsewhere. The "
         "processing engine does not write outside the application root."
     )
-    for label, filename in (
-        ("Decisions (CSV)", "decisions.csv"),
-        ("Validation errors (CSV)", "validation_errors.csv"),
-        ("Run manifest (JSON)", "run_manifest.json"),
-        ("Processing summary (JSON)", "processing_summary.json"),
-        ("Audit events (JSONL)", "audit.jsonl"),
-    ):
-        payload = service.read_import_artifact(result.run_id, filename)
+    for label, filename in _RUN_ARTIFACTS:
+        payload = service.read_import_artifact(run_id, filename)
         if payload is None:
             continue
         st.download_button(
             label,
             data=payload,
-            file_name=f"{result.run_id}-{filename}",
-            key=f"dl-{filename}",
+            file_name=f"{run_id}-{filename}",
+            key=f"dl-{key_prefix}-{run_id}-{filename}",
         )
+
+
+def _render_recent_runs(service: ConsoleService) -> None:
+    """Recent imported runs — safe manifest metadata only."""
+
+    st.divider()
+    st.subheader("Recent imported runs")
+
+    try:
+        runs = service.recent_imported_runs()
+    except Exception:
+        st.caption("Recent runs are unavailable.")
+        return
+
+    if not runs:
+        st.caption("No imported runs yet.")
+        return
+
+    st.caption(
+        "Metadata only — run identifiers, counts and digests. No message "
+        "content is stored or shown here."
+    )
+    st.dataframe(
+        [
+            {
+                "run_id": run.run_id,
+                "status": run.status,
+                "started": run.started_at,
+                "completed": run.completed_at or "—",
+                "source": run.source_filename_sanitized,
+                "seen": run.rows_seen,
+                "processed": run.rows_processed,
+                "rejected": run.rows_rejected,
+                "policy": run.policy_version,
+                "digest": (run.decision_digest or "—")[:16],
+            }
+            for run in runs
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    labels = {f"{run.run_id} · {run.status}": run.run_id for run in runs}
+    chosen = st.selectbox(
+        "Reopen a run", tuple(labels), index=None, key="recent_run_pick"
+    )
+    if chosen is None:
+        return
+
+    run_id = labels[chosen]
+    picked = next(run for run in runs if run.run_id == run_id)
+    columns = st.columns(4)
+    columns[0].metric("Rows seen", picked.rows_seen)
+    columns[1].metric("Processed", picked.rows_processed)
+    columns[2].metric("Rejected", picked.rows_rejected)
+    columns[3].metric("Status", picked.status)
+    st.caption(
+        f"Policy {picked.policy_version} · digest "
+        f"`{(picked.decision_digest or '—')[:32]}`"
+    )
+    _render_run_downloads(service, run_id, key_prefix="recent")
 
 
 def render_walkthrough(service: ConsoleService) -> None:

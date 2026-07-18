@@ -59,6 +59,45 @@ class AuditView:
 
 
 @dataclass(frozen=True, slots=True)
+class ImportPreview:
+    """Pre-processing view of an uploaded batch.
+
+    Deliberately shallow: identifiers, routing-relevant metadata and a
+    truncated subject only. Message bodies are never surfaced, and subjects are
+    truncated, so the preview cannot become an unredacted content viewer.
+    """
+
+    display_name: str
+    detected_format: str
+    row_count: int
+    detected_columns: tuple[str, ...]
+    missing_columns: tuple[str, ...]
+    unexpected_columns: tuple[str, ...]
+    sample_rows: tuple[Mapping[str, str], ...]
+    truncated: bool
+
+    @property
+    def columns_ok(self) -> bool:
+        return not self.missing_columns and not self.unexpected_columns
+
+
+@dataclass(frozen=True, slots=True)
+class ImportedRunSummary:
+    """Safe metadata for one previously completed imported run."""
+
+    run_id: str
+    status: str
+    started_at: str
+    completed_at: str | None
+    source_filename_sanitized: str
+    rows_seen: int
+    rows_processed: int
+    rows_rejected: int
+    policy_version: str
+    decision_digest: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ImportRunView:
     """Console-facing summary of one imported run.
 

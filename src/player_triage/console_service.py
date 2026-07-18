@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import re
 import tempfile
@@ -15,6 +16,8 @@ from .configuration_manager import ConfigurationManager
 from .console_contracts import (
     AuditView,
     DashboardSnapshot,
+    ImportedRunSummary,
+    ImportPreview,
     ImportRunView,
     MessageView,
     VersionView,
@@ -40,11 +43,63 @@ _IMPORT_RUN_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
 )
 
 
+#: Longest subject fragment shown in the import preview.
+_PREVIEW_SUBJECT_CHARS: Final[int] = 48
+
+
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
     if not path.is_file():
         return []
     with path.open(newline="", encoding="utf-8") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _truncate(value: str) -> str:
+    text = " ".join(value.split())
+    if len(text) <= _PREVIEW_SUBJECT_CHARS:
+        return text
+    return text[:_PREVIEW_SUBJECT_CHARS] + "…"
+
+
+def _read_structure(payload: bytes, suffix: str) -> tuple[list[str], list[dict[str, str]]]:
+    """Return (headers, rows) for preview. Structure only, never validated."""
+
+    if suffix == ".csv":
+        text = payload.decode("utf-8-sig", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        headers = list(reader.fieldnames or [])
+        rows = [
+            {key: (value if value is not None else "") for key, value in row.items()}
+            for row in reader
+        ]
+        return headers, rows
+
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+    try:
+        sheet = workbook.active
+        if sheet is None:
+            return [], []
+        iterator = sheet.iter_rows(values_only=True)
+        try:
+            header_row = next(iterator)
+        except StopIteration:
+            return [], []
+        headers = [str(v) if v is not None else "" for v in header_row]
+        rows = []
+        for raw in iterator:
+            if all(cell is None or cell == "" for cell in raw):
+                continue
+            rows.append(
+                {
+                    header: ("" if cell is None else str(cell))
+                    for header, cell in zip(headers, raw)
+                }
+            )
+        return headers, rows
+    finally:
+        workbook.close()
 
 
 class ConsoleServiceError(ConfigurationError):
@@ -498,6 +553,135 @@ class ConsoleService:
         if not target.is_relative_to(root) or not target.is_file():
             return None
         return target.read_bytes()
+
+    def import_template_csv(self) -> bytes:
+        """A downloadable CSV template for the fixed import contract.
+
+        Header row plus one clearly synthetic example row. Contains no real
+        player data and no sensitive values.
+        """
+
+        from .ingestion import REQUIRED_COLUMNS
+
+        example = {
+            "msg_id": "M1",
+            "received_utc": "2026-01-01T09:00:00Z",
+            "channel": "email",
+            "market": "Ontario",
+            "player_id": "P-00000",
+            "vip_tier": "none",
+            "language": "en",
+            "subject": "EXAMPLE ROW - replace or delete before import",
+            "body": "Synthetic example. No real player data.",
+        }
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer, fieldnames=list(REQUIRED_COLUMNS), lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerow(example)
+        return buffer.getvalue().encode("utf-8")
+
+    def preview_import(
+        self, payload: bytes, *, display_name: str, max_rows: int = 5
+    ) -> ImportPreview:
+        """Inspect an uploaded batch before processing it.
+
+        Reads structure only. Nothing is classified, no run directory is
+        created and no artifact is written. Subjects are truncated and bodies
+        are never included.
+        """
+
+        from .imported_runs import sanitize_display_name
+        from .ingestion import REQUIRED_COLUMNS
+
+        safe_name = sanitize_display_name(display_name)
+        suffix = Path(safe_name).suffix.lower()
+        if suffix not in {".csv", ".xlsx"}:
+            raise self._error("import", "unsupported input format")
+
+        headers, rows = _read_structure(payload, suffix)
+        required = set(REQUIRED_COLUMNS)
+        present = set(headers)
+
+        sample: list[dict[str, str]] = []
+        for row in rows[:max_rows]:
+            subject = row.get("subject", "")
+            sample.append(
+                {
+                    "msg_id": row.get("msg_id", ""),
+                    "received_utc": row.get("received_utc", ""),
+                    "channel": row.get("channel", ""),
+                    "market": row.get("market", ""),
+                    "language": row.get("language", ""),
+                    "subject_preview": _truncate(subject),
+                }
+            )
+
+        return ImportPreview(
+            display_name=safe_name,
+            detected_format=suffix.lstrip("."),
+            row_count=len(rows),
+            detected_columns=tuple(headers),
+            missing_columns=tuple(c for c in REQUIRED_COLUMNS if c not in present),
+            unexpected_columns=tuple(c for c in headers if c not in required),
+            sample_rows=tuple(sample),
+            truncated=len(rows) > max_rows,
+        )
+
+    def recent_imported_runs(self, limit: int = 20) -> Sequence[ImportedRunSummary]:
+        """Safe metadata for recent imported runs, newest first.
+
+        Reads only each run's manifest. No message content is exposed.
+        """
+
+        from .imported_runs import IMPORTED_RUNS_DIRNAME, RUN_MANIFEST_FILENAME
+
+        root = self.output_root / IMPORTED_RUNS_DIRNAME
+        if not root.is_dir():
+            return ()
+
+        summaries: list[ImportedRunSummary] = []
+        for entry in sorted(root.iterdir(), reverse=True):
+            if not entry.is_dir() or not _IMPORT_RUN_ID_PATTERN.match(entry.name):
+                continue
+            manifest_path = entry / RUN_MANIFEST_FILENAME
+            if not manifest_path.is_file():
+                continue
+            try:
+                with manifest_path.open(encoding="utf-8") as handle:
+                    doc = json.load(handle)
+            except (OSError, ValueError):
+                # A partially written or corrupt manifest must not break the
+                # list; the run simply does not appear.
+                continue
+            summaries.append(
+                ImportedRunSummary(
+                    run_id=str(doc.get("run_id", entry.name)),
+                    status=str(doc.get("status", "unknown")),
+                    started_at=str(doc.get("started_at", "")),
+                    completed_at=(
+                        str(doc["completed_at"])
+                        if doc.get("completed_at") is not None
+                        else None
+                    ),
+                    source_filename_sanitized=str(
+                        doc.get("source_filename_sanitized", "")
+                    ),
+                    rows_seen=int(doc.get("rows_seen", 0)),
+                    rows_processed=int(doc.get("rows_processed", 0)),
+                    rows_rejected=int(doc.get("rows_rejected", 0)),
+                    policy_version=str(doc.get("policy_version", "")),
+                    decision_digest=(
+                        str(doc["decision_digest"])
+                        if doc.get("decision_digest")
+                        else None
+                    ),
+                )
+            )
+            if len(summaries) >= limit:
+                break
+        return tuple(summaries)
 
     def walkthrough_overview(self) -> Mapping[str, Any]:
         """Static orientation facts for the walkthrough page."""

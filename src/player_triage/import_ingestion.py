@@ -46,9 +46,11 @@ from .ingestion import (
 )
 from .records import RawMessage, ValidationIssue
 
-#: Upper bound on rows accepted from a single imported file. Well above the
-#: supported batch sizes; guards against a pathological or corrupt workbook.
-MAX_IMPORT_ROWS: Final[int] = 100_000
+#: Approved Phase 09 maximum batch size: 10,000 rows per imported file.
+#: Exactly 10,000 is accepted; 10,001 fails during loading, before any row is
+#: classified, so an over-limit file produces zero processed rows and zero
+#: model calls.
+MAX_IMPORT_ROWS: Final[int] = 10_000
 
 # Sanitized issue codes. These appear in validation_errors.csv and must never
 # be derived from source content.
