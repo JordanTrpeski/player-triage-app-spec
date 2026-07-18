@@ -54,7 +54,7 @@ MAX_IMPORT_ROWS: Final[int] = 100_000
 # be derived from source content.
 CODE_INVALID_SOURCE_MESSAGE_ID: Final[str] = "invalid_source_message_id"
 CODE_DUPLICATE_SOURCE_MESSAGE_ID: Final[str] = "duplicate_source_message_id"
-CODE_NUMERIC_COLLISION: Final[str] = "source_message_id_numeric_collision"
+CODE_NUMERIC_COLLISION: Final[str] = "ambiguous_padded_id_collision"
 CODE_INVALID_ROW: Final[str] = "invalid_row"
 
 

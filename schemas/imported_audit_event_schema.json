@@ -1,0 +1,495 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "imported_audit_event_schema.json",
+  "title": "Imported-run audit event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audit_schema_version",
+    "event_id",
+    "event_type",
+    "run_id",
+    "occurred_at",
+    "message_id",
+    "actor",
+    "configuration_version",
+    "payload"
+  ],
+  "properties": {
+    "audit_schema_version": {
+      "const": "3.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "decision",
+        "human_override",
+        "error_fallback",
+        "configuration_change",
+        "configuration_rollback",
+        "run_summary"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "message_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^M[0-9]{1,9}$"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "role"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "system",
+            "human"
+          ]
+        },
+        "role": {
+          "type": "string"
+        },
+        "actor_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "configuration_version": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "decision"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "input_metadata",
+              "decision_path",
+              "rules_triggered",
+              "result",
+              "controls",
+              "processing_time_ms"
+            ],
+            "properties": {
+              "input_metadata": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "language",
+                  "channel",
+                  "market",
+                  "attachment_received",
+                  "attachment_referenced",
+                  "sensitive_data_types",
+                  "prompt_injection_detected",
+                  "redaction_status",
+                  "redaction_count"
+                ],
+                "properties": {
+                  "language": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "string"
+                  },
+                  "market": {
+                    "type": "string"
+                  },
+                  "attachment_received": {
+                    "type": "boolean"
+                  },
+                  "attachment_referenced": {
+                    "type": "boolean"
+                  },
+                  "sensitive_data_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "authentication_secret",
+                        "cvv",
+                        "payment_card_number",
+                        "email",
+                        "phone",
+                        "player_id",
+                        "transaction_reference",
+                        "currency_amount",
+                        "identity_document_number"
+                      ]
+                    }
+                  },
+                  "prompt_injection_detected": {
+                    "type": "boolean"
+                  },
+                  "redaction_status": {
+                    "type": "string",
+                    "enum": [
+                      "passed",
+                      "blocked",
+                      "uncertain",
+                      "error"
+                    ]
+                  },
+                  "redaction_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "decision_path": {
+                "type": "string",
+                "enum": [
+                  "deterministic",
+                  "model_assisted",
+                  "rules_only_baseline",
+                  "manual_fallback",
+                  "human_override"
+                ]
+              },
+              "rules_triggered": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "result": {
+                "$ref": "imported_decision_schema.json"
+              },
+              "controls": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "schema_valid",
+                  "semantic_valid",
+                  "policy_override_applied",
+                  "fallback_reason"
+                ],
+                "properties": {
+                  "schema_valid": {
+                    "type": "boolean"
+                  },
+                  "semantic_valid": {
+                    "type": "boolean"
+                  },
+                  "policy_override_applied": {
+                    "type": "boolean"
+                  },
+                  "fallback_reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "INPUT_INVALID",
+                      "REDACTION_UNCERTAIN",
+                      "MODEL_UNAVAILABLE",
+                      "MODEL_TIMEOUT",
+                      "MODEL_SCHEMA_INVALID",
+                      "SEMANTIC_VALIDATION_FAILED",
+                      "UNSUPPORTED_LANGUAGE",
+                      "NO_CLASSIFICATION_CANDIDATE",
+                      null
+                    ]
+                  }
+                }
+              },
+              "processing_time_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "component_provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "policy_bundle_version"
+                ],
+                "properties": {
+                  "policy_bundle_version": {
+                    "type": "string"
+                  },
+                  "derived_refinement_version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "derived_refinement_digest": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "derived_rules_triggered": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "human_override"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "parent_event_id",
+              "before",
+              "after",
+              "reason_code"
+            ],
+            "properties": {
+              "parent_event_id": {
+                "type": "string"
+              },
+              "before": {
+                "$ref": "imported_decision_schema.json"
+              },
+              "after": {
+                "$ref": "imported_decision_schema.json"
+              },
+              "reason_code": {
+                "type": "string",
+                "enum": [
+                  "CATEGORY_CORRECTION",
+                  "PRIORITY_CORRECTION",
+                  "ROUTE_CORRECTION",
+                  "TEAM_CORRECTION",
+                  "MISSED_HIGH_RISK_SIGNAL",
+                  "FALSE_POSITIVE_SIGNAL",
+                  "NEW_CONTEXT_AVAILABLE"
+                ]
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 300
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "configuration_change",
+              "configuration_rollback"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": {
+            "type": "null"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from_version",
+              "to_version",
+              "change_reason",
+              "changes",
+              "validation_passed",
+              "regression_passed"
+            ],
+            "properties": {
+              "from_version": {
+                "type": "string"
+              },
+              "to_version": {
+                "type": "string"
+              },
+              "change_reason": {
+                "type": "string"
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "component",
+                    "path",
+                    "old_value",
+                    "new_value"
+                  ],
+                  "properties": {
+                    "component": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "old_value": {},
+                    "new_value": {}
+                  }
+                }
+              },
+              "validation_passed": {
+                "type": "boolean"
+              },
+              "regression_passed": {
+                "type": "boolean"
+              },
+              "evaluation_run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "blocked_safety_changes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "error_fallback"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "stage",
+              "reason_code",
+              "fallback_route"
+            ],
+            "properties": {
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "input",
+                  "redaction",
+                  "linkage",
+                  "rules",
+                  "model",
+                  "semantic_validation",
+                  "export"
+                ]
+              },
+              "reason_code": {
+                "type": "string",
+                "enum": [
+                  "INPUT_INVALID",
+                  "REDACTION_UNCERTAIN",
+                  "MODEL_UNAVAILABLE",
+                  "MODEL_TIMEOUT",
+                  "MODEL_SCHEMA_INVALID",
+                  "SEMANTIC_VALIDATION_FAILED",
+                  "UNSUPPORTED_LANGUAGE",
+                  "NO_CLASSIFICATION_CANDIDATE"
+                ]
+              },
+              "fallback_route": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "specialist"
+                ]
+              },
+              "sanitized_error": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 300
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "run_summary"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "message_id": {
+            "type": "null"
+          },
+          "payload": {
+            "$ref": "evaluation_summary_schema.json"
+          }
+        }
+      }
+    }
+  ],
+  "description": "Audit event for an imported run. Derived from audit_event_schema.json with the imported identifier pattern and decision payloads referencing imported_decision_schema.json. audit_event_schema.json is unchanged."
+}

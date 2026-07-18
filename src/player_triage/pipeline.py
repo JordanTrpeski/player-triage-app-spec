@@ -9,7 +9,7 @@ raw subject/body text.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .config import AppConfig
 from .detection import DetectionEngine
@@ -33,7 +33,21 @@ def ingest(
     """Run the full Phase 02 pipeline over the requested input file."""
 
     source = Path(input_path) if input_path is not None else _default_input(config)
-    raw_messages = load_raw(source)
+    return ingest_raw(config, load_raw(source))
+
+
+def ingest_raw(
+    config: AppConfig,
+    raw_messages: Sequence[RawMessage],
+) -> tuple[IngestedMessage, ...]:
+    """Run the full Phase 02 pipeline over already-loaded rows.
+
+    Extracted so the imported-data path can reuse detection, redaction,
+    overlays and linkage unchanged after its own fault-tolerant load, rather
+    than reimplementing them. :func:`ingest` delegates here, so both paths run
+    identical processing.
+    """
+
     engine = DetectionEngine.from_policy(config.component("redaction_policy"))
     overlays = load_overlays(config.component("market_overlays"))
     linkage_map = build_linkage(raw_messages)

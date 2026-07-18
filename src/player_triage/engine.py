@@ -87,6 +87,12 @@ class TriageEngine:
     model_gate: ModelCallGate
     model_invoker: ModelInvocationCoordinator
     model_aggregator: ModelCandidateAggregator
+    #: Schema used to validate each produced decision. Defaults to the accepted
+    #: supplied-40 contract. Imported runs pass
+    #: ``imported_decision_schema.json``, which is structurally identical but
+    #: accepts the wider imported identifier pattern. The accepted
+    #: ``output_schema.json`` is never modified.
+    output_schema_file: str = _OUTPUT_SCHEMA_FILE
 
     @classmethod
     def from_config(
@@ -96,6 +102,7 @@ class TriageEngine:
         mode: str = "rules_only",
         semantic_classifier: SemanticClassifier | None = None,
         kill_switch: bool = False,
+        output_schema_file: str = _OUTPUT_SCHEMA_FILE,
     ) -> "TriageEngine":
         if mode not in {"rules_only", "local_model"}:
             raise ValueError("mode must be rules_only or local_model")
@@ -135,6 +142,7 @@ class TriageEngine:
                 intents=tuple(config.vocab.intents),
             ),
             model_aggregator=ModelCandidateAggregator(final_policy.const),
+            output_schema_file=output_schema_file,
         )
 
     # -- governance provenance ---------------------------------------------
@@ -445,7 +453,7 @@ class TriageEngine:
             decision.add_values("secondary_intents", [top], stage="aggregation")
 
     def _schema_errors(self, decision_dict: dict[str, Any]) -> list[str]:
-        schema_id = self.config.schema_registry.ids.get(_OUTPUT_SCHEMA_FILE)
+        schema_id = self.config.schema_registry.ids.get(self.output_schema_file)
         if schema_id is None:  # pragma: no cover - registry always has it
             return ["output schema not registered"]
         validator = self.config.schema_registry.validator(schema_id)
