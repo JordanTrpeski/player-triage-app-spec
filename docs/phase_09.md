@@ -298,24 +298,54 @@ The repository's `docs/decision_log_outline.md` and
 These four will be transferred separately before final submission packaging.
 The accepted submission archive has not been rebuilt.
 
-### 5.3 Dependency lock discrepancy (open, Phase 09 item 3)
+### 5.3 Dependency lock discrepancy (resolved)
 
-`requirements-lock.txt` pins `llama_cpp_python==0.3.34` — the rejected
-local-model runtime — while **omitting Streamlit and its entire transitive
-tree** (altair, pandas, pyarrow, tornado, pydeck, and others). It therefore
-cannot build a runnable rules-only UI environment, and installing from it would
-pull in the rejected runtime.
+**The defect.** `requirements-lock.txt` pinned `llama_cpp_python==0.3.34` — the
+rejected local-model runtime — while **omitting Streamlit and its entire
+transitive tree** (altair, pandas, pyarrow, tornado, pydeck, protobuf,
+GitPython, requests, pillow, blinker, cachetools, narwhals, tenacity, toml,
+watchdog). An environment built from it therefore had no operator console while
+still carrying the rejected inference runtime — the exact inverse of the
+approved delivery shape. Its `packaging==26.2` and `rich==15.0.0` pins also
+differ from the versions pyproject.toml resolves (`packaging==24.2`,
+`rich==13.9.4`), so it did not describe the environment that produced the
+accepted results. It appears to predate the Phase 07 console work.
 
-The reproducible path used for this phase, and the one that will back
-`setup_windows.ps1`, is:
+**The resolution.** Three explicit locks now replace it:
+
+| File | Purpose | Contains llama-cpp-python |
+| --- | --- | --- |
+| `requirements-rules-only.lock` | the delivered rules_only runtime: CLI, Streamlit UI, CSV import, XLSX import, validation | No |
+| `requirements-dev.lock` | rules-only runtime + pytest + mypy (release suite) | No |
+| `requirements-local-model.lock` | optional, deliberate reconstruction of the rejected model environment | Yes — opt-in only |
+
+`requirements-lock.txt` is retained for audit continuity but is now
+comment-only, so installing from it cannot reintroduce the defect. Its original
+contents are preserved verbatim inside it. Historical references to it in the
+Phase 01 reports remain accurate for that point in history.
+
+Approved installation path (used by `setup_windows.ps1`):
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --editable ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -r requirements-rules-only.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps --editable .
 ```
 
-This installs the pinned default and dev dependencies and excludes the optional
-`local_model` extra. No package versions were changed.
+No package versions were changed or upgraded. Every pin was captured from the
+environment that reproduced the accepted canonical digest.
+
+**Verification in fresh virtual environments.**
+
+`requirements-rules-only.lock` (new venv, `--no-deps` package install):
+streamlit 1.41.1, openpyxl, jsonschema and typer present; `llama-cpp-python`,
+pytest and mypy absent; `POLICY LOAD COMPLETE`, `POLICY PACKAGE VALID`,
+`APPLICATION SPEC VALID`; supplied-40 run reproduced digest
+`a90de550…f70a62b`; importing `streamlit`, `player_triage.ui.app` and
+`player_triage.cli` loaded no `llama*` module.
+
+`requirements-dev.lock` (separate new venv): **354 passed, 1 deselected**;
+mypy clean, 52 source files; `llama-cpp-python` absent.
 
 ---
 

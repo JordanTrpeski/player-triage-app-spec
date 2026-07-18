@@ -1,0 +1,29 @@
+# OPTIONAL — REJECTED LOCAL-MODEL RUNTIME. NOT PART OF THE DELIVERED APPLICATION.
+#
+# ============================================================================
+# DO NOT INSTALL THIS FOR NORMAL SETUP, THE DEFAULT TEST SUITE, OR DELIVERY.
+# ============================================================================
+#
+# The local model was evaluated in Phase 04 and REJECTED:
+#   approval_status        = rejected
+#   model_conclusion       = model_rejected_no_material_improvement
+#   delivered runtime      = rules_only
+#   expected model calls   = 0
+#
+# This file exists only so that the historical model-evaluation environment can
+# be reconstructed deliberately, for audit or re-evaluation. Installing it does
+# not enable the model: activation is additionally gated by policy-3.3.1's
+# model_configuration component (enabled=false, approval_status=rejected).
+#
+# Installing it also requires a GGUF artifact staged outside the repository at
+# the path resolved from model_configuration's local_path_reference. No such
+# artifact is distributed with this repository and none should be downloaded to
+# satisfy the default suite.
+#
+# Deliberate use only:
+#   pip install -r requirements-rules-only.lock
+#   pip install -r requirements-local-model.lock
+#   pytest -m local_model
+
+llama_cpp_python==0.3.34
+diskcache==5.6.3

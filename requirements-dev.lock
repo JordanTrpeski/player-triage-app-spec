@@ -1,0 +1,29 @@
+# Development lock — rules-only runtime plus repository development tooling.
+#
+# This is the environment that runs the default release suite (pytest), type
+# checking (mypy) and the policy/application validators.
+#
+# Contains the complete rules-only runtime (see requirements-rules-only.lock)
+# plus pytest and mypy. Like the rules-only lock it EXCLUDES
+# llama-cpp-python and any model artifact: the default release suite must pass
+# with no GGUF, no llama-cpp-python, no local-model import and zero model calls.
+#
+# Install:
+#   python -m venv .venv
+#   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.lock
+#   .\.venv\Scripts\python.exe -m pip install --no-deps --editable .
+#
+# Verify:
+#   .\.venv\Scripts\python.exe -m pytest -q
+#   .\.venv\Scripts\python.exe -m mypy --config-file pyproject.toml
+#   .\.venv\Scripts\python.exe tools/validate_policy_package.py
+#   .\.venv\Scripts\python.exe tools/validate_application_spec.py
+
+-r requirements-rules-only.lock
+
+# --- development tooling ----------------------------------------------------
+iniconfig==2.3.0
+mypy==1.11.2
+mypy_extensions==1.1.0
+pluggy==1.6.0
+pytest==8.3.3
