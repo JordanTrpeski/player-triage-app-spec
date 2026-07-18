@@ -427,8 +427,18 @@ rows_processed + rows_failed  == rows_accepted
 
 ### Application schemas
 
-Three new schemas, generated from the accepted ones so they cannot structurally
-drift:
+The imported schemas were initially derived programmatically from the accepted
+schemas to reduce accidental structural divergence.
+
+**This is a one-time derivation, not an enforced invariant.** No automated
+compatibility test currently verifies that the imported schemas keep every
+required accepted decision field, that only the approved identifier and
+correlation fields differ, or that a future change to the accepted output
+structure fails loudly. A future edit to `output_schema.json` would therefore
+**not** cause an explicit compatibility-test failure. Adding such a test is a
+recommended follow-up; it is out of scope for the Phase 09 closeout audit.
+
+The three schemas:
 
 | Schema | Role |
 | --- | --- |
@@ -556,6 +566,38 @@ One pre-existing test was updated: `test_phase07_console.py` pinned the console
 to exactly eight pages. Phase 09 adds Walkthrough and Import, so the expected
 list was extended to ten and the test renamed. The list remains explicit rather
 than counted, so any future page change stays reviewable.
+
+### Closeout audit findings
+
+Four items were identified during the closeout audit and corrected here. None
+changed application behaviour.
+
+1. **The earlier 256-file clone proof was stale.** It was taken at commit
+   `2e13241`, when only `.gitattributes` had been added. The final branch has
+   **273** tracked files. The proof was re-run against final HEAD `df2bef1`:
+   hostile `core.autocrlf=true` clone, clean tree immediately after checkout,
+   **273/273 files byte-identical**, both validators passing, supplied-40 digest
+   reproduced, `setup_windows.ps1` completing, launcher serving HTTP 200 with
+   hardened settings active.
+
+2. **The configured row limit is 100,000, not 10,000.** `MAX_IMPORT_ROWS` in
+   `src/player_triage/import_ingestion.py` has always been `100_000`. No
+   document claimed 10,000; the limit was simply undocumented. It is now stated
+   in `HANDOVER.md` §6 and pinned by a test. **The value itself was not changed**
+   — altering it would be a behaviour change, which the audit prohibits. If
+   10,000 is the intended operational limit, that is a one-line change plus a
+   test update, and it needs an explicit decision.
+
+3. **No automated schema-compatibility test exists.** The claim that the
+   imported schemas "cannot structurally drift" was not enforced by anything.
+   The wording is corrected above, and the gap is recorded as a recommended
+   follow-up rather than silently implied to be covered.
+
+4. **Batch-size boundaries had no automated coverage.** Only 120- and 250-row
+   cases existed. `tests/test_phase09_batch_sizes.py` now pins 1, 40, 99, 100
+   and 101 rows end to end, the configured limit value, and the at-limit /
+   over-limit paths (via a small stand-in limit, so the real code path is
+   exercised in milliseconds rather than by generating 100,001 rows).
 
 ### Two defects found and fixed during item 8-9 verification
 

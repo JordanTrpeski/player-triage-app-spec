@@ -151,6 +151,40 @@ Invalid rows are **reported, never silently discarded**. Structural failures
 Copies leave the machine via browser downloads. The operator never selects a
 server-side destination.
 
+### Fixed column contract
+
+There is **no column mapping UI**. The importer requires exactly these nine
+columns, by name, in the header row. Missing columns, duplicated columns and
+unexpected extra columns are all rejected as structural failures.
+
+| Column | Rule |
+| --- | --- |
+| `msg_id` | `^M[0-9]{1,9}$` for imports; preserved exactly |
+| `received_utc` | ISO-8601; `Z` accepted; naive values treated as UTC |
+| `channel` | `email` or `chat` |
+| `market` | `Ontario`, `Malta`, `Ireland`, `India`, `New Zealand` |
+| `player_id` | `^P-\d{5}$` |
+| `vip_tier` | free text |
+| `language` | non-empty, at most 12 characters |
+| `subject` | at most 300 characters; subject and body cannot both be empty |
+| `body` | at most 8,000 characters |
+
+`input/dataset_player_messages.csv` is a valid example of this layout and can be
+used as a reference template. **No downloadable template is offered in the UI.**
+
+### Batch size limit
+
+The configured maximum is **`MAX_IMPORT_ROWS = 100,000`** rows per file, defined
+in `src/player_triage/import_ingestion.py`. Input above the limit fails during
+loading, before any row is classified: the run is recorded as `failed`, no rows
+are processed, and the manifest carries the sanitized reason
+`imported file exceeds 100000 rows`.
+
+Verified sizes: 1, 40, 99, 100, 101, 900, 1,000 and 10,000 rows all complete
+with correct accounting and zero model calls; 100,001 rows fails before
+processing. Approximate wall-clock on the development machine: 900 rows ≈ 11 s,
+10,000 rows ≈ 121 s. Engineering evidence only — not a throughput guarantee.
+
 ---
 
 ## 7. Run isolation
