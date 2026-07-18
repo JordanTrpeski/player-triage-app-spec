@@ -41,8 +41,15 @@ include = ["player_triage*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# The default suite is the rules-only release suite: it must pass on a clean
+# machine with no llama-cpp-python and no GGUF artifact. Tests that require a
+# staged local-model artifact are marked `local_model` and excluded here.
+# Run them deliberately with: pytest -m local_model
+addopts = "-ra -m 'not local_model'"
 python_files = ["test_*.py"]
+markers = [
+  "local_model: requires a deliberately staged local-model artifact; excluded from the default rules-only suite",
+]
 
 [tool.mypy]
 python_version = "3.12"

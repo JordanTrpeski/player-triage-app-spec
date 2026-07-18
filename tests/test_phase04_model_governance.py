@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -33,11 +34,52 @@ def test_model_component_is_versioned_hash_verified_and_portable(app_root: Path)
 
 
 def test_default_model_reference_resolves_outside_repository(app_root: Path) -> None:
+    """Govern the model *reference*, not the state of the machine running the suite.
+
+    This asserts the properties the reference must hold: absolute, ``.gguf``,
+    resolved outside the repository, and resolvable without pulling in the
+    local-model runtime. It deliberately does not require the GGUF artifact to
+    exist. The approved runtime is rules-only, the model is rejected, and the
+    default suite must pass on a clean machine that has neither
+    llama-cpp-python nor a model file. Artifact presence is covered by the
+    optional ``local_model`` test below. See docs/phase_09.md.
+    """
+
+    config = load_app_config(app_root)
+
+    modules_before = set(sys.modules)
+    path = resolve_model_path(config.component(MODEL_CONFIGURATION_COMPONENT))
+    imported_by_resolution = {
+        name for name in set(sys.modules) - modules_before if "llama" in name.lower()
+    }
+
+    assert path.is_absolute()
+    assert path.suffix == ".gguf"
+    assert app_root not in path.parents
+    assert not path.is_relative_to(app_root)
+    assert imported_by_resolution == set()
+
+
+@pytest.mark.local_model
+def test_referenced_model_artifact_is_present_when_local_model_is_configured(
+    app_root: Path,
+) -> None:
+    """Optional: assert the referenced artifact exists.
+
+    Excluded from the default rules-only suite (see ``addopts`` in
+    pyproject.toml) and skipped when the artifact is absent. Never install or
+    download a model to satisfy this test.
+    """
+
     config = load_app_config(app_root)
     path = resolve_model_path(config.component(MODEL_CONFIGURATION_COMPONENT))
-    assert path.is_file()
-    assert app_root not in path.parents
+    if not path.is_file():
+        pytest.skip(
+            f"local-model artifact not staged at {path}; local-model evaluation "
+            "is not configured on this machine"
+        )
     assert path.suffix == ".gguf"
+    assert not path.is_relative_to(app_root)
 
 
 def test_environment_model_path_override_is_supported(
