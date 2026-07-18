@@ -1,0 +1,102 @@
+# Phase 09 repository hardening: deterministic, byte-stable checkout.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# policy/configuration_manifest.json pins SHA-256 digests of the configuration
+# components. Those digests are computed over the exact bytes on disk. On a
+# Windows clone with core.autocrlf=true and no .gitattributes, checkout rewrote
+# LF to CRLF, every LF-based configuration file changed hash, and
+# tools/validate_application_spec.py failed with "configuration hash mismatch".
+#
+# See docs/phase_09.md for the full incident record and repair procedure.
+#
+# IMPORTANT — MIXED LINE ENDINGS IN THE ACCEPTED BASELINE
+# -------------------------------------------------------
+# The accepted baseline (70f3eca) is NOT uniformly LF. Fifteen tracked files
+# were committed with CRLF or mixed endings, and several of them are
+# hash-pinned by policy-3.3.1. For example policy/policy_rules.json contains
+# 738 CRLF pairs and its pinned digest 9be9d0e4bd3192b1... is computed over
+# those CRLF bytes.
+#
+# Normalizing those files to LF would change their SHA-256 values and therefore
+# modify policy-3.3.1, which is prohibited. They are pinned below with `-text`
+# so Git never converts them in either direction and their accepted bytes
+# survive any clone, on any platform, under any core.autocrlf setting.
+#
+# Everything else is normalized to LF as ordinary tracked text.
+
+# --- Default: detect text, always check out text as LF ----------------------
+* text=auto eol=lf
+
+# --- Text surfaces normalized to LF -----------------------------------------
+*.json      text eol=lf
+*.jsonl     text eol=lf
+*.csv       text eol=lf
+*.md        text eol=lf
+*.py        text eol=lf
+*.toml      text eol=lf
+*.sql       text eol=lf
+*.txt       text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+
+# --- Windows launcher files (native CRLF) -----------------------------------
+# cmd.exe requires CRLF in batch files. PowerShell tolerates LF, but CRLF is
+# native on the target platform and avoids editor churn. No pre-existing blobs
+# use these extensions, so declaring them here is safe.
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.psd1      text eol=crlf
+
+# --- Binary formats (never converted, never diffed as text) -----------------
+*.zip       binary
+*.xlsx      binary
+*.xlsm      binary
+*.xltx      binary
+*.docx      binary
+*.pdf       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.sqlite3   binary
+*.sqlite    binary
+*.db        binary
+*.gguf      binary
+*.whl       binary
+*.gz        binary
+*.7z        binary
+*.pyc       binary
+*.woff      binary
+*.woff2     binary
+
+# --- Byte-frozen: committed with CRLF/mixed endings in the accepted baseline -
+# MUST BE LAST: in .gitattributes the last matching rule wins, so these path
+# rules have to follow the extension globs above in order to override them.
+#
+# DO NOT convert these files. Their exact bytes are load-bearing for
+# policy-3.3.1 component digests and for the accepted submission manifest.
+# Re-verify the list at any time with:
+#   git ls-files --eol | Select-String "i/crlf|i/mixed"
+policy/policy_rules.json                                         -text
+policy/redaction_policy.json                                     -text
+policy/baseline_intent_rules.json                                -text
+policy/configuration_manifest.json                               -text
+policy/config_versions/policy-3.0.0/configuration_manifest.json  -text
+policy/config_versions/policy-3.2.0/configuration_manifest.json  -text
+policy/config_versions/policy-3.2.0/policy_rules.json            -text
+policy/config_versions/policy-3.2.0/redaction_policy.json        -text
+policy/config_versions/policy-3.2.0/baseline_intent_rules.json   -text
+submission/SUBMISSION_MANIFEST.json                              -text
+submission/phase_reports/phase_00.md                             -text
+submission/phase_reports/phase_02.md                             -text
+docs/phase_reports/phase_00.md                                   -text
+docs/phase_reports/phase_02.md                                   -text
+src/player_triage/engine.py                                      -text
