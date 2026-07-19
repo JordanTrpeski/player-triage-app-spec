@@ -241,7 +241,13 @@ def _validate_and_build(
 
 
 def _iter_csv_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
-    with path.open(newline="", encoding="utf-8") as file:
+    # utf-8-sig, not utf-8: Excel and several Windows editors write a UTF-8 BOM,
+    # which would otherwise arrive as part of the first header (U+FEFF + msg_id)
+    # and fail the required-column contract before any row was processed. The
+    # codec removes a leading BOM if present and is byte-identical to utf-8
+    # otherwise, so files without one -- including the supplied-40 benchmark --
+    # are unaffected. Header validation itself is deliberately left strict.
+    with path.open(newline="", encoding="utf-8-sig") as file:
         reader = csv.DictReader(file)
         headers = reader.fieldnames or []
         _require_headers(list(headers), source=path)
