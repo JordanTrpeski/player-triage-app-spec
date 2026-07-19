@@ -1,0 +1,104 @@
+============================================================
+ PLAYER CONTACT TRIAGE - START HERE
+============================================================
+
+A local, rules-only prototype that triages player-support
+messages. It runs entirely on this machine and makes zero
+model calls.
+
+
+1. REQUIREMENTS
+------------------------------------------------------------
+   - Windows 10 or later
+   - Python 3.12
+   - Internet access during first setup only
+
+
+2. FIRST USE (once)
+------------------------------------------------------------
+   Double-click:  SETUP_PLAYER_TRIAGE.bat
+
+   Wait for "Setup completed successfully".
+   This can take a few minutes.
+
+
+3. START THE APPLICATION
+------------------------------------------------------------
+   Double-click:  START_PLAYER_TRIAGE.bat
+
+   Leave that window open while you use the application.
+
+
+4. BROWSER ADDRESS
+------------------------------------------------------------
+   http://localhost:8501
+
+   The browser opens automatically. If it does not, open the
+   address above yourself.
+
+
+5. STOP THE APPLICATION
+------------------------------------------------------------
+   Press Ctrl+C in the launcher window, or close the window.
+
+
+6. TROUBLESHOOTING
+------------------------------------------------------------
+   - Confirm Python 3.12 is installed:
+
+         py -3.12 --version
+
+   - If the .venv folder is missing, or startup reports that
+     setup has not been completed, run SETUP_PLAYER_TRIAGE.bat
+     again.
+
+   - Do not install a model. The delivered runtime is
+     rules-only. A local model was evaluated and rejected, and
+     the application never loads or calls one.
+
+
+============================================================
+ USING THE APPLICATION
+============================================================
+
+THE SUPPLIED 40 BENCHMARK
+   The Dashboard opens on the "Supplied 40 Benchmark" - the
+   fixed accepted baseline of 40 supplied messages, with its
+   own ground truth and canonical decision digest. It remains
+   available at all times and is never changed or replaced by
+   anything you import.
+
+IMPORTING YOUR OWN DATA
+   Use the Import page to upload a dataset.
+
+   - Supported formats: CSV and XLSX
+   - Maximum batch size: 10,000 rows
+   - A CSV template is downloadable from the Import page
+
+   Rows that fail validation are reported, never silently
+   dropped. Each import becomes its own isolated run and never
+   overwrites an earlier one.
+
+OPENING AN IMPORT ON THE DASHBOARD
+   When an import finishes, choose "Open run on Dashboard" to
+   see its decisions, counts and distributions. You can also
+   pick any completed run from the "Dataset" selector at the
+   top of the Dashboard.
+
+   Imported data is kept separate from the supplied 40
+   benchmark. Selecting one never alters the other.
+
+A NOTE ON NAVIGATION
+   A file you have chosen on the Import page stays staged while
+   you visit other pages, so you do not have to select it
+   again. Use "Reset import" to clear it.
+
+
+============================================================
+ SCOPE
+============================================================
+
+This is a demonstration prototype, not a production-proven or
+regulator-approved system. It has no authentication and no
+multi-user authorization, and it runs over synthetic data for
+local review only.
