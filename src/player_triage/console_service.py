@@ -6,8 +6,10 @@ import csv
 import io
 import json
 import re
+import secrets
 import tempfile
 from dataclasses import asdict
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Any, Final, Mapping, Sequence
@@ -16,6 +18,7 @@ from .configuration_manager import ConfigurationManager
 from .console_contracts import (
     AuditView,
     DashboardSnapshot,
+    ImportedReviewItem,
     ImportedRunDetail,
     ImportedRunSummary,
     ImportPreview,
@@ -81,6 +84,38 @@ _IMPORTED_DISTRIBUTION_FIELDS: Final[tuple[str, ...]] = (
     "priority",
     "route",
     "assigned_team",
+)
+
+
+#: Routes that put an imported decision in front of a person. An imported run
+#: has no ground truth, so the review queue is built from the routing contract
+#: rather than from mismatches against labels. Taken from the routing map, not
+#: restated here: the classification-catalogue single-source rule forbids
+#: spelling route and team values as Python literals.
+_IMPORTED_REVIEW_ROUTES: Final[frozenset[str]] = frozenset(
+    {_ROUTING.constants.human, _ROUTING.constants.specialist}
+)
+
+
+#: The team a decision falls back to when no specialist queue applies. Counted
+#: as an operational diagnostic, never as an accuracy measure.
+FALLBACK_TEAM: Final[str] = _ROUTING.constants.general_support_team
+
+
+#: Decision fields a human correction may change, on either dataset. Anything
+#: else — identifiers, provenance, model flags — is not the reviewer's to edit.
+_OVERRIDE_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "category",
+        "intent",
+        "secondary_intents",
+        "priority",
+        "route",
+        "assigned_team",
+        "secondary_teams",
+        "risk_flags",
+        "reason_codes",
+    }
 )
 
 
@@ -845,6 +880,288 @@ class ConsoleService:
                 for row in rows
             ),
         )
+
+    # -- imported runs: review, corrections, audit, diagnostics ------------
+
+    def _imported_run_dir(self, run_id: str) -> Path | None:
+        """Resolve a run directory, or ``None`` if it is unusable.
+
+        Applies the same allow-list as the artifact reader so a crafted
+        identifier cannot address anything outside the imported-run root.
+        """
+
+        from .imported_runs import IMPORTED_RUNS_DIRNAME, RUN_MANIFEST_FILENAME
+
+        if not _IMPORT_RUN_ID_PATTERN.match(run_id):
+            return None
+        root = (self.output_root / IMPORTED_RUNS_DIRNAME).resolve()
+        run_dir = (root / run_id).resolve()
+        if not run_dir.is_relative_to(root) or not run_dir.is_dir():
+            return None
+        manifest = _load_manifest(run_dir / RUN_MANIFEST_FILENAME)
+        if manifest is None:
+            return None
+        if str(manifest.get("status", "")) not in SELECTABLE_IMPORT_STATUSES:
+            return None
+        return run_dir
+
+    def _imported_decision_events(
+        self, run_dir: Path
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        """Decision events plus a ``source_message_id -> case_ref`` map.
+
+        ``case_ref`` lives in ``decisions.csv`` rather than in the audit
+        payload, so the two artifacts are joined on the message identifier.
+        """
+
+        from .imported_runs import AUDIT_JSONL_FILENAME, DECISIONS_CSV_FILENAME
+
+        try:
+            events = [
+                event
+                for event in _read_jsonl(run_dir / AUDIT_JSONL_FILENAME)
+                if event.get("event_type") == "decision"
+            ]
+        except ConsoleServiceError:
+            return [], {}
+        try:
+            rows = _read_csv_rows(run_dir / DECISIONS_CSV_FILENAME)
+        except (OSError, ValueError, UnicodeDecodeError):
+            rows = []
+        case_refs = {
+            str(row.get("source_message_id", "")): str(row.get("case_ref", ""))
+            for row in rows
+        }
+        return events, case_refs
+
+    def imported_review_queue(self, run_id: str) -> Sequence[ImportedReviewItem]:
+        """Imported decisions that a human must look at.
+
+        Selection mirrors the routing contract rather than ground truth: an
+        imported run has no labels, so "needs review" means the policy routed
+        it to a human or specialist, or set ``human_review_required``.
+
+        Returns an empty sequence — never raises — for an unknown, unfinished
+        or corrupt run.
+        """
+
+        run_dir = self._imported_run_dir(run_id)
+        if run_dir is None:
+            return ()
+
+        events, case_refs = self._imported_decision_events(run_dir)
+        items: list[ImportedReviewItem] = []
+        for event in events:
+            payload = event.get("payload")
+            if not isinstance(payload, Mapping):
+                continue
+            decision = payload.get("result")
+            if not isinstance(decision, Mapping):
+                continue
+            route = str(decision.get("route", ""))
+            needs_review = route in _IMPORTED_REVIEW_ROUTES or bool(
+                decision.get("human_review_required")
+            )
+            if not needs_review:
+                continue
+            source_message_id = str(decision.get("message_id", ""))
+            items.append(
+                ImportedReviewItem(
+                    run_id=run_id,
+                    case_ref=case_refs.get(source_message_id, ""),
+                    source_message_id=source_message_id,
+                    parent_event_id=str(event.get("event_id", "")),
+                    category=str(decision.get("category", "")),
+                    intent=str(decision.get("intent", "")),
+                    priority=str(decision.get("priority", "")),
+                    route=route,
+                    assigned_team=str(decision.get("assigned_team", "")),
+                    secondary_teams=tuple(
+                        str(value) for value in decision.get("secondary_teams", ())
+                    ),
+                    risk_flags=tuple(
+                        str(value) for value in decision.get("risk_flags", ())
+                    ),
+                    reason_codes=tuple(
+                        str(value) for value in decision.get("reason_codes", ())
+                    ),
+                    human_review_required=bool(decision.get("human_review_required")),
+                    decision=dict(decision),
+                )
+            )
+        return tuple(items)
+
+    def submit_imported_override(
+        self,
+        run_id: str,
+        case_ref: str,
+        source_message_id: str,
+        proposed: Mapping[str, Any],
+        reason_code: str,
+        actor_label: str,
+    ) -> str:
+        """Append an audited correction to one imported decision.
+
+        The correction is scoped to the ``run_id`` / ``case_ref`` /
+        ``source_message_id`` triple and is written to that run's own audit
+        trail. ``decisions.csv`` is never rewritten: the machine decision stays
+        immutable and the correction is a new event beside it, exactly as on
+        the supplied-40 path. Supplied-40 corrections are untouched and cannot
+        be reached from here.
+        """
+
+        from .imported_runs import AUDIT_JSONL_FILENAME, IMPORTED_AUDIT_SCHEMA
+
+        run_dir = self._imported_run_dir(run_id)
+        if run_dir is None:
+            raise self._error("imported_override", "imported run is unavailable")
+
+        unknown = set(proposed) - _OVERRIDE_FIELDS
+        if unknown:
+            raise self._error(
+                "imported_override", "override contains an unsupported field"
+            )
+
+        config = self.configuration.load_active_config()
+        if reason_code not in config.vocab.human_override_reason_codes:
+            raise self._error(
+                "imported_override", "override reason code is not approved"
+            )
+
+        item = next(
+            (
+                candidate
+                for candidate in self.imported_review_queue(run_id)
+                if candidate.source_message_id == source_message_id
+            ),
+            None,
+        )
+        if item is None:
+            raise self._error("imported_override", "imported decision was not found")
+        if item.case_ref != case_ref:
+            # The triple must agree, or the correction is being applied to a
+            # different case than the operator was shown.
+            raise self._error("imported_override", "case reference does not match")
+
+        before = dict(item.decision)
+        after = dict(before)
+        after.update(proposed)
+        after["decision_basis"] = "human_override"
+
+        occurred_at = (
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        )
+        event = {
+            "audit_schema_version": "3.0",
+            "event_id": f"{run_id}-override-{secrets.token_hex(6)}",
+            "event_type": "human_override",
+            "run_id": run_id,
+            "occurred_at": occurred_at,
+            "message_id": source_message_id,
+            "actor": {
+                "type": "human",
+                "role": "local_reviewer",
+                "actor_ref": actor_label or "local-reviewer",
+            },
+            "configuration_version": str(config.bundle_version),
+            "payload": {
+                "parent_event_id": item.parent_event_id,
+                "before": before,
+                "after": after,
+                "reason_code": reason_code,
+            },
+        }
+
+        schema_id = config.schema_registry.ids.get(IMPORTED_AUDIT_SCHEMA)
+        if schema_id is None:  # pragma: no cover - registry auto-discovers schemas
+            raise self._error("imported_override", "audit schema is not registered")
+        validator = config.schema_registry.validator(schema_id)
+        if any(True for _ in validator.iter_errors(event)):
+            raise self._error(
+                "imported_override", "correction failed audit schema validation"
+            )
+
+        try:
+            with (run_dir / AUDIT_JSONL_FILENAME).open(
+                "a", encoding="utf-8", newline="\n"
+            ) as handle:
+                handle.write(
+                    json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+                )
+        except OSError as exc:
+            raise self._error(
+                "imported_override", "correction could not be recorded"
+            ) from exc
+        return str(event["event_id"])
+
+    def imported_audit_events(
+        self, run_id: str, filters: Mapping[str, object] | None = None
+    ) -> Sequence[AuditView]:
+        """Audit events belonging to one imported run, newest first."""
+
+        from .imported_runs import AUDIT_JSONL_FILENAME
+
+        run_dir = self._imported_run_dir(run_id)
+        if run_dir is None:
+            return ()
+        try:
+            documents = _read_jsonl(run_dir / AUDIT_JSONL_FILENAME)
+        except ConsoleServiceError:
+            return ()
+
+        output: list[AuditView] = []
+        for event in documents:
+            view = AuditView(
+                event_id=str(event.get("event_id", "")),
+                run_id=str(event.get("run_id", "")),
+                message_id=(
+                    str(event["message_id"])
+                    if event.get("message_id") is not None
+                    else None
+                ),
+                event_type=str(event.get("event_type", "")),
+                occurred_at=str(event.get("occurred_at", "")),
+                configuration_version=str(event.get("configuration_version", "")),
+                actor=dict(event.get("actor", {})),
+                payload=dict(event.get("payload", {})),
+            )
+            if _matches_audit_filters(view, filters or {}):
+                output.append(view)
+        return tuple(sorted(output, key=lambda item: item.occurred_at, reverse=True))
+
+    def imported_run_diagnostics(self, run_id: str) -> Mapping[str, Any] | None:
+        """Operational counts for one imported run.
+
+        Deliberately not accuracy: an imported run has no ground truth, so
+        nothing here is an agreement or evaluation score. Returns ``None`` for
+        an unusable run.
+        """
+
+        detail = self.imported_run_detail(run_id)
+        if detail is None:
+            return None
+        teams = detail.distributions.get("assigned_team", {})
+        routes = detail.distributions.get("route", {})
+        return {
+            "run_id": detail.run_id,
+            "source_filename_sanitized": detail.source_filename_sanitized,
+            "rows_processed": detail.rows_processed,
+            "rows_rejected": detail.rows_rejected,
+            "rows_failed": detail.rows_failed,
+            "model_calls": detail.model_calls,
+            "policy_version": detail.policy_version,
+            "decision_digest": detail.decision_digest,
+            "category_distribution": dict(detail.distributions.get("category", {})),
+            "priority_distribution": dict(detail.distributions.get("priority", {})),
+            "route_distribution": dict(routes),
+            "team_distribution": dict(teams),
+            "fallback_to_general_count": int(teams.get(FALLBACK_TEAM, 0)),
+            "review_routed_count": sum(
+                int(count)
+                for route, count in routes.items()
+                if route in _IMPORTED_REVIEW_ROUTES
+            ),
+        }
 
     def walkthrough_overview(self) -> Mapping[str, Any]:
         """Static orientation facts for the walkthrough page."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict
-from typing import Any, Callable, Final, Mapping
+from typing import Any, Callable, Final, Mapping, Sequence
 
 import streamlit as st
 
@@ -16,7 +16,11 @@ from player_triage.console_contracts import (
     ImportRunView,
     MessageView,
 )
-from player_triage.console_service import SELECTABLE_IMPORT_STATUSES, ConsoleService
+from player_triage.console_service import (
+    FALLBACK_TEAM,
+    SELECTABLE_IMPORT_STATUSES,
+    ConsoleService,
+)
 from player_triage.import_ingestion import MAX_IMPORT_ROWS
 from player_triage.pattern_lab import FIXTURES, run_pattern_lab
 
@@ -26,11 +30,13 @@ from player_triage.pattern_lab import FIXTURES, run_pattern_lab
 NAVIGATION_KEY: Final[str] = "navigation"
 NAVIGATION_REQUEST_KEY: Final[str] = "navigation_request"
 
-#: Dashboard dataset selection. ``None`` means the supplied-40 benchmark.
-DASHBOARD_DATASET_KEY: Final[str] = "dashboard_dataset"
+#: The dataset every dataset-scoped page shares: Dashboard, Messages, Human
+#: Review and the Audit Explorer. ``None`` means the supplied-40 benchmark.
+#: One key, so opening a run on the Dashboard survives navigation.
+SELECTED_DATASET_KEY: Final[str] = "selected_dataset"
 
-#: The dataset selectbox's own widget key.
-DASHBOARD_DATASET_PICK_KEY: Final[str] = "dashboard_dataset_pick"
+#: Kept as an alias: the dashboard was the original owner of this selection.
+DASHBOARD_DATASET_KEY: Final[str] = SELECTED_DATASET_KEY
 
 #: The accepted baseline's display name. Deliberately explicit so the view is
 #: never read as "the latest data".
@@ -40,6 +46,23 @@ SUPPLIED_40_LABEL: Final[str] = "Supplied 40 Benchmark"
 #: state of widgets it did not render on a given rerun, so the uploader's
 #: bytes are mirrored into this ordinary (non-widget) key.
 IMPORT_STATE_KEY: Final[str] = "import_state"
+
+#: A staged imported correction, held between preview and submission. Carries
+#: its own run and case identifiers so it cannot be applied to another case.
+IMPORTED_OVERRIDE_PREVIEW_KEY: Final[str] = "imported_override_preview"
+
+#: The evaluation page's name. Explicit about scope: agreement metrics exist
+#: only for datasets that have ground truth.
+BENCHMARK_EVALUATION_LABEL: Final[str] = "Benchmark Evaluation"
+
+#: Shown wherever agreement numbers appear, so an imported run is never read
+#: as having been scored against labels it does not have.
+BENCHMARK_ONLY_NOTICE: Final[str] = (
+    "Agreement metrics are calculated only for the supplied 40-message "
+    "benchmark and labelled holdout sets. Imported operational runs do not "
+    "have ground-truth labels and are therefore not included in agreement "
+    "scoring."
+)
 
 
 def render_dashboard(service: ConsoleService) -> None:
@@ -52,12 +75,31 @@ def render_dashboard(service: ConsoleService) -> None:
 
     st.title("Dashboard")
 
-    labels = dashboard_dataset_options(service)
-    if len(labels) == 1:
-        st.caption("No imported runs are available yet. Use the Import page.")
+    selected_run_id = render_dataset_context(service, widget_key="dashboard_dataset_pick")
+    if selected_run_id is None:
+        _render_supplied_40_dashboard(service)
+        return
+    _render_imported_run_dashboard(service, selected_run_id)
 
+
+def render_dataset_context(
+    service: ConsoleService, *, widget_key: str, show_selector: bool = True
+) -> str | None:
+    """Shared dataset selection, used by every dataset-scoped page.
+
+    Returns the selected imported ``run_id``, or ``None`` for the supplied-40
+    benchmark. The choice lives in one session-state key, so opening a run on
+    the Dashboard carries it to Messages, Human Review and the Audit Explorer
+    rather than each page silently reverting to the benchmark.
+
+    A run that has since been deleted, interrupted or corrupted is reported
+    explicitly and falls back to the benchmark; it is never substituted in
+    silence.
+    """
+
+    labels = dashboard_dataset_options(service)
     options = tuple(labels)
-    requested = st.session_state.get(DASHBOARD_DATASET_KEY)
+    requested = st.session_state.get(SELECTED_DATASET_KEY)
     target = next(
         (label for label, run_id in labels.items() if run_id == requested), None
     )
@@ -65,33 +107,39 @@ def render_dashboard(service: ConsoleService) -> None:
         # Seeding the widget's key is only legal before it is instantiated, and
         # is deterministic in a way `index=` is not: Streamlit ignores `index=`
         # whenever the key already carries a value.
-        st.session_state[DASHBOARD_DATASET_PICK_KEY] = target
+        st.session_state[widget_key] = target
     elif isinstance(requested, str) and requested:
-        # A specific run was asked for but is no longer selectable — deleted,
-        # interrupted or corrupt. Say so and fall back to the benchmark rather
-        # than silently showing different data than was requested.
         st.warning(
             f"Imported run {requested} is no longer available. Showing the "
             f"{SUPPLIED_40_LABEL} instead."
         )
-        st.session_state[DASHBOARD_DATASET_PICK_KEY] = SUPPLIED_40_LABEL
+        st.session_state[widget_key] = SUPPLIED_40_LABEL
+        st.session_state[SELECTED_DATASET_KEY] = None
 
-    chosen_label = st.selectbox(
-        "Dataset",
-        options,
-        key=DASHBOARD_DATASET_PICK_KEY,
-        help=(
-            "The supplied 40 benchmark is the fixed accepted baseline. "
-            "Imported runs are isolated from it and never change it."
-        ),
-    )
+    if show_selector:
+        chosen_label = st.selectbox(
+            "Dataset",
+            options,
+            key=widget_key,
+            help=(
+                "The supplied 40 benchmark is the fixed accepted baseline. "
+                "Imported runs are isolated from it and never change it."
+            ),
+        )
+    else:
+        chosen_label = st.session_state.get(widget_key, SUPPLIED_40_LABEL)
+        if chosen_label not in labels:
+            chosen_label = SUPPLIED_40_LABEL
+
     selected_run_id = labels[chosen_label]
-    st.session_state[DASHBOARD_DATASET_KEY] = selected_run_id
+    st.session_state[SELECTED_DATASET_KEY] = selected_run_id
 
-    if selected_run_id is None:
-        _render_supplied_40_dashboard(service)
-        return
-    _render_imported_run_dashboard(service, selected_run_id)
+    # Requirement of this page family: the operator must never have to infer
+    # which dataset is on screen.
+    st.caption(f"**Dataset:** {chosen_label}")
+    if len(labels) == 1:
+        st.caption("No imported runs are available yet. Use the Import page.")
+    return selected_run_id
 
 
 def dashboard_dataset_options(service: ConsoleService) -> dict[str, str | None]:
@@ -252,6 +300,10 @@ def _render_imported_run_dashboard(service: ConsoleService, run_id: str) -> None
 def render_messages(service: ConsoleService) -> None:
     st.title("Messages")
     st.caption("Structured decisions only. Raw subject, body, player identifiers and sensitive values are never displayed.")
+    selected_run_id = render_dataset_context(service, widget_key="messages_dataset_pick")
+    if selected_run_id is not None:
+        _render_imported_messages(service, selected_run_id)
+        return
     config = service.configuration.load_active_config()
     all_views = service.messages()
     with st.expander("Filters", expanded=True):
@@ -308,9 +360,50 @@ def render_messages(service: ConsoleService) -> None:
     _render_message_detail(view)
 
 
+def _render_imported_messages(service: ConsoleService, run_id: str) -> None:
+    """Imported decisions on the Messages page.
+
+    Ground-truth filters (core mismatch, diagnostic difference, expected
+    versus actual) are absent by design: an imported run has no labels to
+    compare against.
+    """
+
+    try:
+        detail = service.imported_run_detail(run_id)
+    except Exception:
+        detail = None
+    if detail is None:
+        st.warning(
+            "This imported run is no longer available, or its manifest is "
+            "incomplete. Select another dataset."
+        )
+        return
+
+    st.caption(
+        f"Run `{detail.run_id}` · source `{detail.source_filename_sanitized or '—'}` "
+        f"· {detail.rows_processed} decision(s)"
+    )
+    st.info(
+        "Imported runs carry no ground truth, so mismatch and expected-versus-"
+        "actual columns do not apply here."
+    )
+    if not detail.decisions:
+        st.info("This run published no decisions.")
+        return
+    st.dataframe(list(detail.decisions), hide_index=True, use_container_width=True)
+
+
 def render_human_review(service: ConsoleService) -> None:
     st.title("Human Review")
     st.caption("Corrections append a new audited view. The original machine decision and ground truth remain immutable.")
+    selected_run_id = render_dataset_context(service, widget_key="review_dataset_pick")
+    if selected_run_id is not None:
+        _render_imported_review(service, selected_run_id)
+        return
+    _render_supplied_40_review(service)
+
+
+def _render_supplied_40_review(service: ConsoleService) -> None:
     queue = service.review_queue()
     if not queue:
         st.info("The review queue is empty.")
@@ -361,6 +454,190 @@ def render_human_review(service: ConsoleService) -> None:
             st.session_state.pop("safe_override_preview", None)
 
 
+def _render_imported_review(service: ConsoleService, run_id: str) -> None:
+    """Human review over one imported run.
+
+    Corrections are scoped to the ``run_id`` / ``case_ref`` /
+    ``source_message_id`` triple and are appended to that run's own audit
+    trail, so they can never be confused with supplied-40 corrections.
+    """
+
+    try:
+        detail = service.imported_run_detail(run_id)
+        queue = service.imported_review_queue(run_id)
+    except Exception:
+        detail, queue = None, ()
+    if detail is None:
+        st.warning(
+            "This imported run is no longer available, or its manifest is "
+            "incomplete. Select another dataset."
+        )
+        return
+
+    st.caption(
+        f"Run `{detail.run_id}` · source `{detail.source_filename_sanitized or '—'}`"
+    )
+    st.markdown(
+        '<div class="safe-banner">A correction appends a new audited event to '
+        "this run. The original machine decision is never overwritten, and "
+        "supplied-40 corrections are kept entirely separate.</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Queue contains decisions routed to a human or specialist, or flagged "
+        "for review. Imported runs have no ground truth, so nothing here is "
+        "scored against labels."
+    )
+
+    if not queue:
+        st.info("No imported decision in this run requires review.")
+        return
+
+    st.metric("Cases requiring review", len(queue))
+    st.dataframe(
+        [
+            {
+                "source_message_id": item.source_message_id,
+                "case_ref": item.case_ref,
+                "category": item.category,
+                "intent": item.intent,
+                "priority": item.priority,
+                "route": item.route,
+                "assigned_team": item.assigned_team,
+                "secondary_teams": ", ".join(item.secondary_teams) or "—",
+                "risk_flags": ", ".join(item.risk_flags) or "—",
+                "reason_codes": ", ".join(item.reason_codes) or "—",
+                "human_review_required": item.human_review_required,
+            }
+            for item in queue
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    selected = st.selectbox(
+        "Imported message",
+        [item.source_message_id for item in queue],
+        key=f"imported_review_pick_{run_id}",
+    )
+    item = next(entry for entry in queue if entry.source_message_id == selected)
+    st.caption(
+        f"Correcting `{item.source_message_id}` · case `{item.case_ref}` · run "
+        f"`{item.run_id}`"
+    )
+
+    config = service.configuration.load_active_config()
+    original = item.decision
+    with st.form(f"imported_override_preview_{run_id}"):
+        cols = st.columns(3)
+        category = cols[0].selectbox(
+            "Category",
+            config.vocab.categories,
+            index=_vocab_index(config.vocab.categories, item.category),
+        )
+        intent = cols[1].selectbox(
+            "Intent",
+            config.vocab.intents,
+            index=_vocab_index(config.vocab.intents, item.intent),
+        )
+        priority = cols[2].selectbox(
+            "Priority",
+            config.vocab.priorities,
+            index=_vocab_index(config.vocab.priorities, item.priority),
+        )
+        cols = st.columns(3)
+        route = cols[0].selectbox(
+            "Route",
+            config.vocab.routes,
+            index=_vocab_index(config.vocab.routes, item.route),
+        )
+        team = cols[1].selectbox(
+            "Assigned team",
+            config.vocab.teams,
+            index=_vocab_index(config.vocab.teams, item.assigned_team),
+        )
+        secondary_teams = cols[2].multiselect(
+            "Secondary teams", config.vocab.teams, default=list(item.secondary_teams)
+        )
+        risk_flags = st.multiselect(
+            "Risk flags", config.vocab.risk_flags, default=list(item.risk_flags)
+        )
+        reason_codes = st.multiselect(
+            "Reason codes", config.vocab.reason_codes, default=list(item.reason_codes)
+        )
+        proposed = {
+            "category": category,
+            "intent": intent,
+            "priority": priority,
+            "route": route,
+            "assigned_team": team,
+            "secondary_teams": secondary_teams,
+            "risk_flags": risk_flags,
+            "reason_codes": reason_codes,
+        }
+        preview = st.form_submit_button("Preview correction")
+
+    if preview:
+        st.session_state[IMPORTED_OVERRIDE_PREVIEW_KEY] = {
+            "run_id": run_id,
+            "case_ref": item.case_ref,
+            "source_message_id": item.source_message_id,
+            "proposed": proposed,
+        }
+
+    staged = st.session_state.get(IMPORTED_OVERRIDE_PREVIEW_KEY)
+    if not isinstance(staged, dict):
+        return
+    # A staged correction belongs to one case in one run. Changing either
+    # discards it rather than applying it to the wrong decision.
+    if (
+        staged.get("run_id") != run_id
+        or staged.get("source_message_id") != item.source_message_id
+    ):
+        return
+
+    st.subheader("Required before/after diff")
+    st.dataframe(
+        _diff_rows(original, staged["proposed"]),
+        hide_index=True,
+        use_container_width=True,
+    )
+    with st.form(f"imported_override_submit_{run_id}"):
+        reason = st.selectbox(
+            "Override reason", config.vocab.human_override_reason_codes
+        )
+        actor = st.text_input("Local reviewer label", value="local-reviewer")
+        confirm = st.checkbox("I confirm this is a structured correction only")
+        submit = st.form_submit_button("Append imported correction", disabled=not confirm)
+    if submit:
+        try:
+            event_id = service.submit_imported_override(
+                staged["run_id"],
+                staged["case_ref"],
+                staged["source_message_id"],
+                staged["proposed"],
+                reason,
+                actor,
+            )
+        except Exception:
+            st.error(
+                "The correction was not recorded. The original decision is "
+                "unchanged."
+            )
+            return
+        st.success(f"Correction appended to run {run_id}: {event_id}")
+        st.session_state.pop(IMPORTED_OVERRIDE_PREVIEW_KEY, None)
+
+
+def _vocab_index(options: Sequence[str], value: str) -> int:
+    """Position of ``value``, or 0 when it is absent from the vocabulary."""
+
+    try:
+        return list(options).index(value)
+    except ValueError:
+        return 0
+
+
 def render_policy_studio(service: ConsoleService) -> None:
     st.title("Policy Studio")
     st.markdown(
@@ -387,12 +664,15 @@ def render_policy_studio(service: ConsoleService) -> None:
 
 
 def render_evaluation(service: ConsoleService) -> None:
-    st.title("Evaluation")
+    st.title(BENCHMARK_EVALUATION_LABEL)
+    st.caption("**Evaluation scope:** benchmark datasets only")
+    st.info(BENCHMARK_ONLY_NOTICE)
     docs = service.evaluation_documents()
     dataset_document = docs.get("dataset_results", {})
     results = dataset_document.get("results", []) if isinstance(dataset_document, Mapping) else []
     if not results:
         st.info("Evaluation artifacts are unavailable. Run the Phase 06 evaluation safely first.")
+        _render_imported_diagnostics(service)
         return
     supplied: Mapping[str, Any] = next(
         (item for item in results if item.get("dataset_name") == "supplied-40"),
@@ -437,11 +717,92 @@ def render_evaluation(service: ConsoleService) -> None:
     for name, content in service.safe_downloads().items():
         mime = "text/csv" if name.endswith(".csv") else "application/json"
         st.download_button(name, content, file_name=name, mime=mime, key=f"download_{name}")
+    _render_imported_diagnostics(service)
+
+
+def _render_imported_diagnostics(service: ConsoleService) -> None:
+    """Operational counts for the selected imported run.
+
+    Deliberately separate from everything above it. None of these numbers is
+    an accuracy, agreement or evaluation-against-truth measure, because an
+    imported run carries no labels to measure against.
+    """
+
+    st.divider()
+    st.subheader("Imported Run Diagnostics")
+
+    try:
+        runs = service.selectable_imported_runs()
+    except Exception:
+        runs = ()
+    if not runs:
+        st.caption("No completed imported run is available.")
+        return
+
+    labels = {f"{run.run_id} · {run.status}": run.run_id for run in runs}
+    selected = st.session_state.get(SELECTED_DATASET_KEY)
+    default = next(
+        (label for label, run_id in labels.items() if run_id == selected), None
+    )
+    options = tuple(labels)
+    chosen = st.selectbox(
+        "Imported run",
+        options,
+        index=options.index(default) if default in options else 0,
+        key="diagnostics_run_pick",
+    )
+
+    try:
+        diagnostics = service.imported_run_diagnostics(labels[chosen])
+    except Exception:
+        diagnostics = None
+    if diagnostics is None:
+        st.warning("That imported run is no longer available.")
+        return
+
+    st.caption(
+        "Operational counts only — not accuracy, not agreement, and not "
+        "scored against ground truth."
+    )
+    cols = st.columns(4)
+    cols[0].metric("Rows processed", diagnostics["rows_processed"])
+    cols[1].metric("Rows rejected", diagnostics["rows_rejected"])
+    cols[2].metric("Model calls", diagnostics["model_calls"])
+    # Label built from the routing map's own value rather than restated here,
+    # so no controlled-vocabulary team name appears as a literal in source.
+    cols[3].metric(f"Fallback to {FALLBACK_TEAM}", diagnostics["fallback_to_general_count"])
+
+    st.caption(
+        f"Run `{diagnostics['run_id']}` · source "
+        f"`{diagnostics['source_filename_sanitized'] or '—'}` · policy "
+        f"{diagnostics['policy_version']} · decision digest "
+        f"`{diagnostics['decision_digest'] or '—'}`"
+    )
+
+    dist_cols = st.columns(3)
+    for index, (title, key) in enumerate(
+        (
+            ("Category", "category_distribution"),
+            ("Priority", "priority_distribution"),
+            ("Route", "route_distribution"),
+        )
+    ):
+        with dist_cols[index]:
+            st.markdown(f"**{title}**")
+            st.dataframe(
+                [
+                    {title.lower(): name, "count": count}
+                    for name, count in diagnostics[key].items()
+                ],
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def render_audit_explorer(service: ConsoleService) -> None:
     st.title("Audit Explorer")
     st.caption("Structured audit only—no raw/redacted message text, detected values, model prompts or local model paths.")
+    selected_run_id = render_dataset_context(service, widget_key="audit_dataset_pick")
     with st.expander("Search", expanded=True):
         cols = st.columns(4)
         event_id = cols[0].text_input("Event ID", key="audit_event_id")
@@ -453,18 +814,23 @@ def render_audit_explorer(service: ConsoleService) -> None:
         rule = cols[1].text_input("Rule ID")
         reason = cols[2].text_input("Reason code")
         actor = cols[3].text_input("Actor/component")
-    events = service.audit_events(
-        {
-            "event_id": event_id or None,
-            "run_id": run_id or None,
-            "message_id": message_id or None,
-            "event_type": event_type or None,
-            "configuration_version": version or None,
-            "rule_id": rule or None,
-            "reason_code": reason or None,
-            "actor": actor or None,
-        }
-    )
+    filters = {
+        "event_id": event_id or None,
+        "run_id": run_id or None,
+        "message_id": message_id or None,
+        "event_type": event_type or None,
+        "configuration_version": version or None,
+        "rule_id": rule or None,
+        "reason_code": reason or None,
+        "actor": actor or None,
+    }
+    if selected_run_id is None:
+        events = service.audit_events(filters)
+    else:
+        # Scoped to the selected run's own trail, so an imported correction is
+        # never listed alongside a supplied-40 one.
+        events = service.imported_audit_events(selected_run_id, filters)
+        st.caption(f"Showing the audit trail of imported run `{selected_run_id}`.")
     if not events:
         st.info("No audit events match the current search.")
         return
@@ -1153,7 +1519,7 @@ PAGE_RENDERERS: Mapping[str, Callable[[ConsoleService], None]] = {
     "Messages": render_messages,
     "Human Review": render_human_review,
     "Policy Studio": render_policy_studio,
-    "Evaluation": render_evaluation,
+    BENCHMARK_EVALUATION_LABEL: render_evaluation,
     "Audit Explorer": render_audit_explorer,
     "Configuration Versions": render_configuration_versions,
     "Settings": render_settings,

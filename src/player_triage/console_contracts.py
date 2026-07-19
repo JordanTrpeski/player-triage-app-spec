@@ -126,6 +126,33 @@ class ImportedRunDetail:
 
 
 @dataclass(frozen=True, slots=True)
+class ImportedReviewItem:
+    """One imported decision awaiting human review.
+
+    Identified by the triple a correction is scoped to — ``run_id``,
+    ``case_ref`` and ``source_message_id`` — so an imported correction can
+    never be confused with a supplied-40 one. ``decision`` is the schema-valid
+    imported decision record from the run's audit trail, which carries no
+    subject, body or player identifier.
+    """
+
+    run_id: str
+    case_ref: str
+    source_message_id: str
+    parent_event_id: str
+    category: str
+    intent: str
+    priority: str
+    route: str
+    assigned_team: str
+    secondary_teams: tuple[str, ...]
+    risk_flags: tuple[str, ...]
+    reason_codes: tuple[str, ...]
+    human_review_required: bool
+    decision: Mapping[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class ImportRunView:
     """Console-facing summary of one imported run.
 

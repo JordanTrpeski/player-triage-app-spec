@@ -161,7 +161,8 @@ def test_streamlit_all_console_pages_render_without_exception(
 
     The list is pinned explicitly rather than counted, so adding or removing a
     page is a deliberate, reviewable change. Phase 09 added Walkthrough (the
-    landing page) and Import to the original eight.
+    landing page) and Import to the original eight, and renamed Evaluation to
+    Benchmark Evaluation so its scope is stated rather than inferred.
     """
 
     monkeypatch.setenv("PLAYER_TRIAGE_APP_ROOT", str(app_root))
@@ -175,7 +176,7 @@ def test_streamlit_all_console_pages_render_without_exception(
         "Messages",
         "Human Review",
         "Policy Studio",
-        "Evaluation",
+        "Benchmark Evaluation",
         "Audit Explorer",
         "Configuration Versions",
         "Settings",
