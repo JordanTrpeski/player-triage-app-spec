@@ -1,21 +1,41 @@
-# Player Contact Triage — Application Specification v3.0
+## Reviewer quick start
 
-This package is the frozen application contract for a local, provider-independent player-message triage prototype.
+This repository contains the Player Contact Triage Automation case-study prototype.
 
-Start with:
-- `docs/app/app_requirements.md`
-- `docs/app/application_architecture.md`
-- `docs/app/ui_spec.md`
-- `docs/app/schema_logic.md`
-- `docs/app/change_management.md`
-- `docs/app/technology_stack.md`
-- `policy/application_requirements.json`
-- `policy/configuration_manifest.json`
+### Run on Windows
 
-Validate:
+1. Download or clone the repository.
+2. Double-click `SETUP_PLAYER_TRIAGE.bat` once.
+3. Double-click `START_PLAYER_TRIAGE.bat`.
+4. Open the local Streamlit URL shown in the terminal.
 
-```bash
-python tools/validate_application_spec.py
-```
+### Suggested walkthrough
 
-The application must provide both a Streamlit local control console and a repeatable Typer CLI. Configuration changes are versioned, impact-tested and reversible. Raw sensitive message content is not written to operational outputs or internal SQLite state.
+1. Open **Walkthrough** for the system overview.
+2. Open **Dashboard** to review the supplied 40-message benchmark.
+3. Open **Evaluation** to inspect benchmark agreement and the documented M22 intent difference.
+4. Open **Import** to process a CSV or XLSX operational batch.
+5. Review routing decisions, audit records and downloadable outputs.
+6. Open **Policy Studio** to demonstrate controlled rule and threshold changes.
+
+### Important design boundaries
+
+- Every accepted message is automatically classified, prioritised and routed.
+- Human or specialist routing is an automated routing result, not a processing failure.
+- Consequential responsible-gambling, payment, KYC, fraud and account actions remain human-controlled.
+- The submitted runtime is deterministic `rules_only`.
+- The evaluated local model is not called.
+- Imported operational runs are isolated from the accepted benchmark.
+- Imported runs without ground-truth labels are not presented as accuracy evaluations.
+
+### Principal outputs
+
+- Readable decision CSV
+- Structured JSONL audit trail
+- Validation-error report
+- Processing summary
+- Run manifest and decision digest
+
+### Prototype status
+
+This is a case-study prototype, not a production service. Production deployment would require approved integrations, authentication and authorisation, monitoring, operational ownership, privacy and security review, and validation against a larger representative labelled dataset.
