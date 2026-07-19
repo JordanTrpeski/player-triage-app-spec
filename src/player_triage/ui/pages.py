@@ -2,21 +2,128 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Final, Mapping
 
 import streamlit as st
 
 from player_triage.configuration_manager import ConfigurationManager
-from player_triage.console_contracts import MessageView
-from player_triage.console_service import ConsoleService
+from player_triage.console_contracts import (
+    ImportedRunSummary,
+    ImportPreview,
+    ImportRunView,
+    MessageView,
+)
+from player_triage.console_service import SELECTABLE_IMPORT_STATUSES, ConsoleService
 from player_triage.import_ingestion import MAX_IMPORT_ROWS
 from player_triage.pattern_lab import FIXTURES, run_pattern_lab
 
+#: Sidebar radio key, and the request key a page sets to move the operator
+#: elsewhere. Assignment to a widget key is only legal before that widget is
+#: instantiated, so cross-page navigation is a request consumed in ``app.py``.
+NAVIGATION_KEY: Final[str] = "navigation"
+NAVIGATION_REQUEST_KEY: Final[str] = "navigation_request"
+
+#: Dashboard dataset selection. ``None`` means the supplied-40 benchmark.
+DASHBOARD_DATASET_KEY: Final[str] = "dashboard_dataset"
+
+#: The dataset selectbox's own widget key.
+DASHBOARD_DATASET_PICK_KEY: Final[str] = "dashboard_dataset_pick"
+
+#: The accepted baseline's display name. Deliberately explicit so the view is
+#: never read as "the latest data".
+SUPPLIED_40_LABEL: Final[str] = "Supplied 40 Benchmark"
+
+#: Import page state that must survive navigation. Streamlit discards the
+#: state of widgets it did not render on a given rerun, so the uploader's
+#: bytes are mirrored into this ordinary (non-widget) key.
+IMPORT_STATE_KEY: Final[str] = "import_state"
+
 
 def render_dashboard(service: ConsoleService) -> None:
+    """Dashboard over one selected dataset.
+
+    The supplied-40 benchmark and each completed imported run are separate
+    datasets. The benchmark is never relabelled as "latest": it is a fixed
+    accepted baseline, and imported data is deliberately isolated from it.
+    """
+
     st.title("Dashboard")
+
+    labels = dashboard_dataset_options(service)
+    if len(labels) == 1:
+        st.caption("No imported runs are available yet. Use the Import page.")
+
+    options = tuple(labels)
+    requested = st.session_state.get(DASHBOARD_DATASET_KEY)
+    target = next(
+        (label for label, run_id in labels.items() if run_id == requested), None
+    )
+    if target is not None:
+        # Seeding the widget's key is only legal before it is instantiated, and
+        # is deterministic in a way `index=` is not: Streamlit ignores `index=`
+        # whenever the key already carries a value.
+        st.session_state[DASHBOARD_DATASET_PICK_KEY] = target
+    elif isinstance(requested, str) and requested:
+        # A specific run was asked for but is no longer selectable — deleted,
+        # interrupted or corrupt. Say so and fall back to the benchmark rather
+        # than silently showing different data than was requested.
+        st.warning(
+            f"Imported run {requested} is no longer available. Showing the "
+            f"{SUPPLIED_40_LABEL} instead."
+        )
+        st.session_state[DASHBOARD_DATASET_PICK_KEY] = SUPPLIED_40_LABEL
+
+    chosen_label = st.selectbox(
+        "Dataset",
+        options,
+        key=DASHBOARD_DATASET_PICK_KEY,
+        help=(
+            "The supplied 40 benchmark is the fixed accepted baseline. "
+            "Imported runs are isolated from it and never change it."
+        ),
+    )
+    selected_run_id = labels[chosen_label]
+    st.session_state[DASHBOARD_DATASET_KEY] = selected_run_id
+
+    if selected_run_id is None:
+        _render_supplied_40_dashboard(service)
+        return
+    _render_imported_run_dashboard(service, selected_run_id)
+
+
+def dashboard_dataset_options(service: ConsoleService) -> dict[str, str | None]:
+    """The dashboard's dataset choices, newest imported run first.
+
+    Maps display label to run identifier, with ``None`` marking the supplied-40
+    benchmark. The benchmark is always present and always first, so a damaged
+    or empty imported-run directory degrades to "benchmark only" rather than
+    an unusable page.
+    """
+
+    options: dict[str, str | None] = {SUPPLIED_40_LABEL: None}
+    try:
+        runs = service.selectable_imported_runs()
+    except Exception:
+        return options
+    for run in runs:
+        options[_run_option_label(run)] = run.run_id
+    return options
+
+
+def _run_option_label(run: ImportedRunSummary) -> str:
+    return f"Imported run · {run.run_id} · {run.status}"
+
+
+def _render_supplied_40_dashboard(service: ConsoleService) -> None:
+    st.subheader(SUPPLIED_40_LABEL)
+    st.caption(
+        "The fixed accepted regression baseline of 40 supplied messages with "
+        "its own ground truth and canonical digest. This view is not the "
+        "latest imported dataset — select an imported run above to see that."
+    )
     st.markdown(
         '<div class="safe-banner">Rules-only processing is active. The rejected model is disabled and has zero authority.</div>',
         unsafe_allow_html=True,
@@ -67,6 +174,79 @@ def render_dashboard(service: ConsoleService) -> None:
                 "counts": dict(snapshot.counts),
             }
         )
+
+
+def _render_imported_run_dashboard(service: ConsoleService, run_id: str) -> None:
+    """Dashboard for one imported run: manifest metadata and its decisions."""
+
+    try:
+        detail = service.imported_run_detail(run_id)
+    except Exception:
+        detail = None
+
+    if detail is None:
+        st.warning(
+            "This imported run is no longer available, or its manifest is "
+            "incomplete. Select another dataset."
+        )
+        return
+
+    st.subheader(f"Imported run {detail.run_id}")
+    st.markdown(
+        '<div class="safe-banner">Imported batches are processed in rules-only '
+        "mode and are isolated from the accepted benchmark. The rejected model "
+        "is never called.</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Structured decisions only. Subjects, message bodies and player "
+        "identifiers are never written to imported-run artifacts."
+    )
+
+    cols = st.columns(4)
+    cols[0].metric("Status", detail.status)
+    cols[1].metric("Source file", detail.source_filename_sanitized or "—")
+    cols[2].metric("Policy", detail.policy_version or "—")
+    cols[3].metric("Model calls", detail.model_calls)
+
+    cols = st.columns(5)
+    cols[0].metric("Rows seen", detail.rows_seen)
+    cols[1].metric("Accepted", detail.rows_accepted)
+    cols[2].metric("Rejected", detail.rows_rejected)
+    cols[3].metric("Processed", detail.rows_processed)
+    cols[4].metric("Failed", detail.rows_failed)
+
+    st.caption(
+        f"Started {detail.started_at or '—'} · completed "
+        f"{detail.completed_at or '—'} · decision digest "
+        f"`{detail.decision_digest or '—'}`"
+    )
+
+    if detail.rows_rejected:
+        st.warning(
+            f"{detail.rows_rejected} row(s) were rejected and reported. Open "
+            "the Import page to download the validation-error report."
+        )
+
+    st.subheader("Decision distributions")
+    dist_cols = st.columns(2)
+    for index, field in enumerate(("category", "priority", "route", "assigned_team")):
+        with dist_cols[index % 2]:
+            st.markdown(f"**{field.replace('_', ' ').title()}**")
+            values = detail.distributions.get(field, {})
+            st.dataframe(
+                [{field: key, "count": count} for key, count in values.items()],
+                hide_index=True,
+                use_container_width=True,
+            )
+
+    st.subheader("Imported decisions")
+    if not detail.decisions:
+        st.info("This run published no decisions.")
+        return
+    st.dataframe(
+        list(detail.decisions), hide_index=True, use_container_width=True
+    )
 
 
 def render_messages(service: ConsoleService) -> None:
@@ -509,36 +689,55 @@ def render_import(service: ConsoleService) -> None:
         "provides a reproducible template for the live demonstration."
     )
 
+    state = _import_state()
+    nonce = int(state["nonce"])
+
     uploaded = st.file_uploader(
-        "Message batch", type=["csv", "xlsx"], key="import_upload"
+        "Message batch", type=["csv", "xlsx"], key=f"import_upload_{nonce}"
     )
-    allow_padded = st.checkbox(
+    if uploaded is not None:
+        _stage_upload(state, uploaded.name, uploaded.getvalue())
+
+    # `value=` seeds the widget only when it does not yet exist, which is
+    # exactly the post-navigation case; otherwise the widget wins and is
+    # mirrored back, so the setting survives leaving the page.
+    state["allow_padded"] = st.checkbox(
         "Accept differently padded identifiers (M99 and M099) as separate rows",
-        value=False,
+        value=bool(state["allow_padded"]),
         help=(
             "Off by default. When off, a later identifier that is numerically "
             "equal to an earlier one is rejected as "
             "ambiguous_padded_id_collision. Exact duplicates are always an "
             "error."
         ),
-        key="import_allow_padded",
+        key=f"import_allow_padded_{nonce}",
     )
 
-    if uploaded is None:
+    result: ImportRunView | None = state["result"]
+    if result is not None:
+        _render_completion(service, state, result)
+        _render_recent_runs(service)
+        return
+
+    payload: bytes | None = state["payload"]
+    if payload is None:
         st.info("Choose a file to begin. Nothing is processed until you start the run.")
         _render_recent_runs(service)
         return
 
-    payload = uploaded.getvalue()
-
     # --- preview: structure only, before anything is processed ---------------
     st.subheader("Preview")
-    try:
-        preview = service.preview_import(payload, display_name=uploaded.name)
-    except Exception:
+    preview = _staged_preview(service, state, payload)
+    if preview is None:
         st.error("The uploaded file could not be read. Check the format and try again.")
+        _render_reset(state, key=f"import_reset_bad_{nonce}")
         _render_recent_runs(service)
         return
+
+    st.caption(
+        "This file stays staged while you visit other pages. Use **Reset "
+        "import** to clear it."
+    )
 
     info = st.columns(3)
     info[0].metric("Rows detected", preview.row_count)
@@ -546,6 +745,7 @@ def render_import(service: ConsoleService) -> None:
     info[2].metric("Columns", len(preview.detected_columns))
     st.caption(f"File: `{preview.display_name}`")
 
+    over_limit = preview.row_count > MAX_IMPORT_ROWS
     if preview.columns_ok:
         st.success("Column contract satisfied.")
     else:
@@ -555,7 +755,7 @@ def render_import(service: ConsoleService) -> None:
             st.error(f"Unexpected columns: {', '.join(preview.unexpected_columns)}")
         st.caption("Fix the header row, or start from the CSV template above.")
 
-    if preview.row_count > MAX_IMPORT_ROWS:
+    if over_limit:
         st.error(
             f"This file has {preview.row_count:,} rows, above the {MAX_IMPORT_ROWS:,}-row "
             "limit. Split it into smaller batches. Processing would fail before "
@@ -569,22 +769,39 @@ def render_import(service: ConsoleService) -> None:
         )
         st.dataframe(preview.sample_rows, use_container_width=True, hide_index=True)
 
-    if not st.button("Process batch", type="primary", key="import_run"):
+    st.caption(
+        "Processing runs synchronously. Stay on this page until it finishes — "
+        "navigating away cancels the run. A cancelled run is never published, "
+        "so nothing partial reaches the imported-run directory."
+    )
+
+    actions = st.columns(2)
+    start = actions[0].button(
+        "Process batch",
+        type="primary",
+        key=f"import_run_{nonce}",
+        disabled=bool(state["running"]) or over_limit,
+    )
+    with actions[1]:
+        _render_reset(state, key=f"import_reset_{nonce}")
+
+    if not start or state["running"]:
         _render_recent_runs(service)
         return
 
     # --- processing: visible status so a large run never looks frozen -------
+    state["running"] = True
     try:
         with st.status("Processing batch…", expanded=True) as status:
             st.write("Validating file…")
             st.write(f"Creating run and processing {preview.row_count:,} row(s)…")
-            result = service.run_import(
+            completed = service.run_import(
                 payload,
-                display_name=uploaded.name,
-                collision_mode="allow" if allow_padded else "error",
+                display_name=preview.display_name,
+                collision_mode="allow" if state["allow_padded"] else "error",
             )
             st.write("Writing outputs…")
-            if result.status == "failed":
+            if completed.status == "failed":
                 status.update(label="Run failed", state="error")
             else:
                 status.update(label="Completed", state="complete")
@@ -595,6 +812,113 @@ def render_import(service: ConsoleService) -> None:
         )
         _render_recent_runs(service)
         return
+    finally:
+        state["running"] = False
+
+    # The batch is now processed. Retain the run identifier and the safe
+    # summary, and drop the uploaded bytes: they have served their purpose and
+    # holding them would invite a duplicate run.
+    state["result"] = completed
+    state["completed_run_id"] = completed.run_id
+    state["completed_digest"] = state["source_digest"]
+    state["payload"] = None
+    st.rerun()
+
+
+def _import_state() -> dict[str, Any]:
+    """The import page's own state, independent of any widget's lifetime."""
+
+    state = st.session_state.get(IMPORT_STATE_KEY)
+    if not isinstance(state, dict):
+        state = _blank_import_state()
+        st.session_state[IMPORT_STATE_KEY] = state
+    return state
+
+
+def _blank_import_state(nonce: int = 0) -> dict[str, Any]:
+    return {
+        # Bumped on reset so the uploader and checkbox are rebuilt empty:
+        # Streamlit offers no way to clear an existing uploader in place.
+        "nonce": nonce,
+        "filename": None,
+        "payload": None,
+        "source_digest": None,
+        "preview": None,
+        "preview_failed": False,
+        "allow_padded": False,
+        "running": False,
+        "result": None,
+        "completed_run_id": None,
+        "completed_digest": None,
+    }
+
+
+def _stage_upload(state: dict[str, Any], name: str, payload: bytes) -> None:
+    """Mirror an uploaded file into page state, ignoring redundant reruns."""
+
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest == state["completed_digest"]:
+        # Already processed in this session. The uploader still holds the file
+        # on every rerun, so re-staging here would silently re-offer a batch
+        # that has already produced a run.
+        return
+    if digest == state["source_digest"] and state["payload"] is not None:
+        return
+    state.update(
+        filename=name,
+        payload=payload,
+        source_digest=digest,
+        preview=None,
+        preview_failed=False,
+        result=None,
+        completed_run_id=None,
+        completed_digest=None,
+    )
+
+
+def _staged_preview(
+    service: ConsoleService, state: dict[str, Any], payload: bytes
+) -> ImportPreview | None:
+    """Preview the staged batch once, then reuse it across reruns."""
+
+    cached: ImportPreview | None = state["preview"]
+    if cached is not None:
+        return cached
+    if state["preview_failed"]:
+        return None
+    try:
+        preview = service.preview_import(
+            payload, display_name=str(state["filename"] or "upload.csv")
+        )
+    except Exception:
+        state["preview_failed"] = True
+        return None
+    state["preview"] = preview
+    return preview
+
+
+def _reset_import() -> None:
+    """Clear the staged upload, preview and result."""
+
+    state = _import_state()
+    st.session_state[IMPORT_STATE_KEY] = _blank_import_state(int(state["nonce"]) + 1)
+
+
+def _render_reset(state: dict[str, Any], *, key: str) -> None:
+    if st.button(
+        "Reset import",
+        key=key,
+        help="Clear the staged file, its preview and the last run summary.",
+        disabled=bool(state["running"]),
+    ):
+        _reset_import()
+        st.rerun()
+
+
+def _render_completion(
+    service: ConsoleService, state: dict[str, Any], result: ImportRunView
+) -> None:
+    """Post-processing view. Shown again whenever the operator returns here."""
 
     if result.status == "completed":
         st.success(f"Run {result.run_id} completed — {result.rows_processed} rows.")
@@ -619,6 +943,25 @@ def render_import(service: ConsoleService) -> None:
         f"{result.model_calls} · decision digest `{result.decision_digest[:16]}…`"
     )
 
+    actions = st.columns(2)
+    with actions[0]:
+        if result.status in SELECTABLE_IMPORT_STATUSES:
+            if st.button(
+                "Open run on Dashboard",
+                type="primary",
+                key=f"open_run_{result.run_id}",
+            ):
+                _open_run_on_dashboard(result.run_id)
+        else:
+            st.caption("A failed run has no decisions to open.")
+    with actions[1]:
+        _render_reset(state, key=f"import_reset_done_{state['nonce']}")
+
+    st.caption(
+        "This batch has already been processed. Reset the import before "
+        "running another file — the same upload is never processed twice."
+    )
+
     if result.rejected_rows:
         st.subheader("Rejected rows")
         st.caption(
@@ -628,7 +971,14 @@ def render_import(service: ConsoleService) -> None:
         st.dataframe(result.rejected_rows, use_container_width=True, hide_index=True)
 
     _render_run_downloads(service, result.run_id, key_prefix="current")
-    _render_recent_runs(service)
+
+
+def _open_run_on_dashboard(run_id: str) -> None:
+    """Select ``run_id`` on the dashboard and request navigation there."""
+
+    st.session_state[DASHBOARD_DATASET_KEY] = run_id
+    st.session_state[NAVIGATION_REQUEST_KEY] = "Dashboard"
+    st.rerun()
 
 
 _RUN_ARTIFACTS: tuple[tuple[str, str], ...] = (
@@ -718,6 +1068,9 @@ def _render_recent_runs(service: ConsoleService) -> None:
         f"Policy {picked.policy_version} · digest "
         f"`{(picked.decision_digest or '—')[:32]}`"
     )
+    if picked.status in SELECTABLE_IMPORT_STATUSES:
+        if st.button("Open run on Dashboard", key=f"open_recent_{run_id}"):
+            _open_run_on_dashboard(run_id)
     _render_run_downloads(service, run_id, key_prefix="recent")
 
 

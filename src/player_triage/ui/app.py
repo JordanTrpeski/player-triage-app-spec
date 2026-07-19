@@ -7,11 +7,25 @@ import streamlit as st
 from player_triage.console_service import ConsoleService, ConsoleServiceError
 from player_triage.errors import ConfigurationError
 from player_triage.paths import resolve_app_root
-from player_triage.ui.pages import PAGE_RENDERERS
+from player_triage.ui.pages import NAVIGATION_KEY, NAVIGATION_REQUEST_KEY, PAGE_RENDERERS
 
 
 def _service() -> ConsoleService:
     return ConsoleService(resolve_app_root())
+
+
+def _apply_pending_navigation() -> None:
+    """Honour a cross-page navigation request before the radio is built.
+
+    Streamlit raises if a widget's ``session_state`` entry is assigned after
+    that widget has been instantiated, so a page cannot move the sidebar radio
+    directly. Pages instead leave a request key behind and rerun; this consumes
+    it here, while assigning to the radio's key is still legal.
+    """
+
+    requested = st.session_state.pop(NAVIGATION_REQUEST_KEY, None)
+    if isinstance(requested, str) and requested in PAGE_RENDERERS:
+        st.session_state[NAVIGATION_KEY] = requested
 
 
 def main() -> None:
@@ -32,9 +46,10 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     service = _service()
+    _apply_pending_navigation()
     st.sidebar.title("Control Console")
     st.sidebar.caption("Local synthetic demonstration")
-    page = st.sidebar.radio("Navigate", tuple(PAGE_RENDERERS), key="navigation")
+    page = st.sidebar.radio("Navigate", tuple(PAGE_RENDERERS), key=NAVIGATION_KEY)
     st.sidebar.divider()
     st.sidebar.markdown("**Approved mode:** `rules_only`")
     st.sidebar.markdown("**Model:** rejected and unavailable")

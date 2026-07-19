@@ -16,6 +16,7 @@ from .configuration_manager import ConfigurationManager
 from .console_contracts import (
     AuditView,
     DashboardSnapshot,
+    ImportedRunDetail,
     ImportedRunSummary,
     ImportPreview,
     ImportRunView,
@@ -45,6 +46,89 @@ _IMPORT_RUN_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
 
 #: Longest subject fragment shown in the import preview.
 _PREVIEW_SUBJECT_CHARS: Final[int] = 48
+
+
+#: Imported-run statuses whose artifacts are complete enough to be selected and
+#: displayed. ``started`` means the run was interrupted and ``failed`` means it
+#: never produced decisions, so neither is offered as a dashboard dataset.
+SELECTABLE_IMPORT_STATUSES: Final[tuple[str, ...]] = (
+    "completed",
+    "completed_with_errors",
+)
+
+
+#: Columns surfaced in the imported decision table, in display order. Every one
+#: is a structured decision field or an internally generated identifier; the
+#: source subject, body and player identifier are absent from ``decisions.csv``
+#: by construction and are never reintroduced here.
+_IMPORTED_DECISION_COLUMNS: Final[tuple[str, ...]] = (
+    "source_message_id",
+    "case_ref",
+    "category",
+    "intent",
+    "priority",
+    "route",
+    "assigned_team",
+    "human_review_required",
+    "processing_status",
+    "model_called",
+)
+
+
+#: Fields the dashboard summarizes as distributions for an imported run.
+_IMPORTED_DISTRIBUTION_FIELDS: Final[tuple[str, ...]] = (
+    "category",
+    "priority",
+    "route",
+    "assigned_team",
+)
+
+
+def _safe_int(value: object) -> int:
+    """Coerce a manifest value to ``int``, treating anything unusable as zero.
+
+    A hand-edited or partially written manifest can carry a string, ``null`` or
+    a nested object where a count belongs. Counts are presentational here, so a
+    bad value degrades that one number rather than failing the whole page.
+    """
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (str, float)):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _load_manifest(path: Path) -> Mapping[str, Any] | None:
+    """Read a run manifest, returning ``None`` when it is unusable.
+
+    Covers the absent, unreadable, non-JSON and wrong-shape cases in one place
+    so every caller degrades identically instead of raising.
+    """
+
+    if not path.is_file():
+        return None
+    try:
+        with path.open(encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(loaded, Mapping):
+        return None
+    return loaded
+
+
+def _counts_from_rows(rows: Sequence[Mapping[str, str]], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = str(row.get(field, "") or "—")
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -648,10 +732,8 @@ class ConsoleService:
             manifest_path = entry / RUN_MANIFEST_FILENAME
             if not manifest_path.is_file():
                 continue
-            try:
-                with manifest_path.open(encoding="utf-8") as handle:
-                    doc = json.load(handle)
-            except (OSError, ValueError):
+            doc = _load_manifest(manifest_path)
+            if doc is None:
                 # A partially written or corrupt manifest must not break the
                 # list; the run simply does not appear.
                 continue
@@ -668,9 +750,9 @@ class ConsoleService:
                     source_filename_sanitized=str(
                         doc.get("source_filename_sanitized", "")
                     ),
-                    rows_seen=int(doc.get("rows_seen", 0)),
-                    rows_processed=int(doc.get("rows_processed", 0)),
-                    rows_rejected=int(doc.get("rows_rejected", 0)),
+                    rows_seen=_safe_int(doc.get("rows_seen")),
+                    rows_processed=_safe_int(doc.get("rows_processed")),
+                    rows_rejected=_safe_int(doc.get("rows_rejected")),
                     policy_version=str(doc.get("policy_version", "")),
                     decision_digest=(
                         str(doc["decision_digest"])
@@ -682,6 +764,87 @@ class ConsoleService:
             if len(summaries) >= limit:
                 break
         return tuple(summaries)
+
+    def selectable_imported_runs(
+        self, limit: int = 20
+    ) -> Sequence[ImportedRunSummary]:
+        """Imported runs complete enough to open on the dashboard, newest first.
+
+        Interrupted (``started``) and ``failed`` runs are excluded: neither has
+        a trustworthy decision set to display.
+        """
+
+        return tuple(
+            run
+            for run in self.recent_imported_runs(limit=limit)
+            if run.status in SELECTABLE_IMPORT_STATUSES
+        )
+
+    def imported_run_detail(self, run_id: str) -> ImportedRunDetail | None:
+        """Full dashboard view of one imported run, or ``None`` if unusable.
+
+        Returns ``None`` — rather than raising — for an unknown, crafted,
+        unfinished or corrupt run, so a damaged directory degrades to "not
+        selectable" instead of breaking the dashboard.
+        """
+
+        from .imported_runs import (
+            DECISIONS_CSV_FILENAME,
+            IMPORTED_RUNS_DIRNAME,
+            RUN_MANIFEST_FILENAME,
+        )
+
+        if not _IMPORT_RUN_ID_PATTERN.match(run_id):
+            return None
+
+        root = (self.output_root / IMPORTED_RUNS_DIRNAME).resolve()
+        run_dir = (root / run_id).resolve()
+        if not run_dir.is_relative_to(root) or not run_dir.is_dir():
+            return None
+
+        doc = _load_manifest(run_dir / RUN_MANIFEST_FILENAME)
+        if doc is None:
+            return None
+        if str(doc.get("status", "")) not in SELECTABLE_IMPORT_STATUSES:
+            return None
+
+        try:
+            rows = _read_csv_rows(run_dir / DECISIONS_CSV_FILENAME)
+        except (OSError, ValueError, UnicodeDecodeError):
+            rows = []
+
+        return ImportedRunDetail(
+            run_id=str(doc.get("run_id", run_id)),
+            status=str(doc.get("status", "unknown")),
+            source_filename_sanitized=str(doc.get("source_filename_sanitized", "")),
+            started_at=str(doc.get("started_at", "")),
+            completed_at=(
+                str(doc["completed_at"])
+                if doc.get("completed_at") is not None
+                else None
+            ),
+            rows_seen=_safe_int(doc.get("rows_seen")),
+            rows_accepted=_safe_int(doc.get("rows_accepted")),
+            rows_rejected=_safe_int(doc.get("rows_rejected")),
+            rows_processed=_safe_int(doc.get("rows_processed")),
+            rows_failed=_safe_int(doc.get("rows_failed")),
+            policy_version=str(doc.get("policy_version", "")),
+            model_calls=_safe_int(doc.get("model_calls")),
+            decision_digest=(
+                str(doc["decision_digest"]) if doc.get("decision_digest") else None
+            ),
+            distributions={
+                field: _counts_from_rows(rows, field)
+                for field in _IMPORTED_DISTRIBUTION_FIELDS
+            },
+            decisions=tuple(
+                {
+                    column: str(row.get(column, ""))
+                    for column in _IMPORTED_DECISION_COLUMNS
+                }
+                for row in rows
+            ),
+        )
 
     def walkthrough_overview(self) -> Mapping[str, Any]:
         """Static orientation facts for the walkthrough page."""

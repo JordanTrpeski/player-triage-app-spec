@@ -98,6 +98,34 @@ class ImportedRunSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ImportedRunDetail:
+    """Dashboard-facing view of one completed imported run.
+
+    Built from the run manifest and ``decisions.csv`` only. Those artifacts
+    carry structured decision fields and internally generated identifiers, so
+    no subject, body or player identifier can reach this contract. The run
+    directory is deliberately absent: the console addresses runs by ``run_id``
+    and never surfaces a filesystem path.
+    """
+
+    run_id: str
+    status: str
+    source_filename_sanitized: str
+    started_at: str
+    completed_at: str | None
+    rows_seen: int
+    rows_accepted: int
+    rows_rejected: int
+    rows_processed: int
+    rows_failed: int
+    policy_version: str
+    model_calls: int
+    decision_digest: str | None
+    distributions: Mapping[str, Mapping[str, int]]
+    decisions: tuple[Mapping[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ImportRunView:
     """Console-facing summary of one imported run.
 
