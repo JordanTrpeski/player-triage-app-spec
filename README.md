@@ -1,41 +1,89 @@
-## Reviewer quick start
+# Player Contact Triage Automation
 
-This repository contains the Player Contact Triage Automation case-study prototype.
+A deterministic, rules-based engine that classifies, prioritises and routes player support messages for gaming and betting operators.
 
-### Run on Windows
+Author: **Jordan Trpeski** — [trpeski.mk](https://trpeski.mk) · [GitHub](https://github.com/JordanTrpeski)
 
-1. Download or clone the repository.
-2. Double-click `SETUP_PLAYER_TRIAGE.bat` once.
-3. Double-click `START_PLAYER_TRIAGE.bat`.
-4. Open the local Streamlit URL shown in the terminal.
+## What it does
 
-### Suggested walkthrough
+- **Ingestion** — accepts CSV and XLSX batches with strict validation of headers, enumerations, timestamps and player-ID formats. Invalid rows are isolated and reported without stopping the run.
+- **Classification** — assigns each message a category and priority from a fixed taxonomy (8 categories, 4 priorities). High-risk signals such as self-exclusion, underage play, account takeover and exposed payment data are handled by deterministic bypass rules.
+- **Routing** — sends every accepted message to a named team via an automated route. Escalation to human or specialist handling is a routing outcome, not a failure; consequential responsible-gambling, payment, KYC, fraud and account actions stay under human control.
+- **Audit trail** — records every decision, with the rule and policy version that produced it, as structured JSONL so any outcome can be traced and reproduced.
 
-1. Open **Walkthrough** for the system overview.
-2. Open **Dashboard** to review the supplied 40-message benchmark.
-3. Open **Evaluation** to inspect benchmark agreement and the documented M22 intent difference.
-4. Open **Import** to process a CSV or XLSX operational batch.
-5. Review routing decisions, audit records and downloadable outputs.
-6. Open **Policy Studio** to demonstrate controlled rule and threshold changes.
+## Tech Stack
 
-### Important design boundaries
+- Python 3.12
+- Streamlit (local control console)
+- Pydantic (configuration models)
+- JSON Schema (policy and output contracts)
+- pytest
+- mypy (type checking)
 
-- Every accepted message is automatically classified, prioritised and routed.
-- Human or specialist routing is an automated routing result, not a processing failure.
-- Consequential responsible-gambling, payment, KYC, fraud and account actions remain human-controlled.
-- The submitted runtime is deterministic `rules_only`.
-- The evaluated local model is not called.
-- Imported operational runs are isolated from the accepted benchmark.
-- Imported runs without ground-truth labels are not presented as accuracy evaluations.
+## Architecture highlights
 
-### Principal outputs
+- **Data-driven policy** — taxonomy, teams, intent rules, routing rules, market overlays and redaction policy are all defined in versioned JSON under `policy/` and validated against schemas in `schemas/`.
+- **No hardcoded business rules** — the engine interprets policy rather than embedding it, so rules and thresholds can be changed and versioned without code changes.
+- **Immutable domain objects** — decisions and intermediate records are frozen dataclasses, so a result cannot be altered after it is produced.
+- **Deterministic `rules_only` runtime** — the same input and policy version always produce the same output, confirmed by a canonical decision digest. An optional local-model adapter was evaluated and rejected because it gave no material improvement; the shipped runtime never loads a model.
+- **Structured JSONL audit trail** — one event per decision, written against a published audit-event schema.
 
-- Readable decision CSV
-- Structured JSONL audit trail
-- Validation-error report
-- Processing summary
-- Run manifest and decision digest
+## Key outputs
 
-### Prototype status
+| Output | Description |
+| --- | --- |
+| Decision CSV | One readable row per message: category, priority, route, team and rationale |
+| Audit trail | Structured JSONL record of every decision and the rules applied |
+| Validation report | Rows rejected at ingestion and the reason for each |
+| Processing summary | Run-level counts, a run manifest and a decision digest |
 
-This is a case-study prototype, not a production service. Production deployment would require approved integrations, authentication and authorisation, monitoring, operational ownership, privacy and security review, and validation against a larger representative labelled dataset.
+## Running locally
+
+Requires Python 3.12.
+
+```bash
+# 1. Create a virtual environment and install
+python3.12 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install --upgrade pip
+pip install --editable ".[dev]"
+
+# 2. Validate the policy bundle
+python -m player_triage.cli validate-policy
+
+# 3. Process the 40-message benchmark dataset
+python -m player_triage.cli run --output-dir output
+
+# 4. Run the evaluation (metrics, safety gates, performance)
+python -m player_triage.cli evaluate --output-dir output --performance
+
+# 5. Launch the local control console
+python -m player_triage.cli demo
+```
+
+The console binds to `127.0.0.1` only. No network access is needed after the dependencies are installed.
+
+The raw benchmark input is not committed because it contains player message content. Place it at `input/dataset_player_messages.csv` before running step 3.
+
+### Suggested console walkthrough
+
+1. **Walkthrough** — system overview.
+2. **Dashboard** — results for the 40-message benchmark.
+3. **Evaluation** — benchmark agreement and documented differences.
+4. **Import** — process a CSV or XLSX batch. Imported runs are kept separate from the benchmark and are not presented as accuracy evaluations.
+5. **Policy Studio** — controlled changes to rules and thresholds.
+
+## Testing
+
+```bash
+pytest -q                                    # 34 test files
+mypy                                         # disallow_untyped_defs, strict_optional
+python tools/validate_policy_package.py      # policy bundle integrity
+python tools/validate_application_spec.py    # application spec consistency
+```
+
+The suite covers ingestion, normalisation, detection, redaction, the rules engine, the operational pipeline, evaluation governance and the control console.
+
+## Prototype status
+
+This is a case-study prototype, not a production service. Benchmark results reflect agreement on a 40-message demonstration set and synthetic holdouts, not guaranteed accuracy. Deploying it in production would require approved integrations, authentication and authorisation, monitoring, operational ownership, privacy and security review, and validation against a larger, representative labelled dataset.
