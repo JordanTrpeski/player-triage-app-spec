@@ -12,7 +12,7 @@ from __future__ import annotations
 import ctypes
 import importlib
 import multiprocessing
-import os
+import sys
 import time
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
@@ -240,7 +240,7 @@ def hanging_test_worker(connection: Connection, settings: WorkerSettings) -> Non
 
 
 def _resident_bytes() -> int | None:
-    if os.name != "nt":
+    if sys.platform != "win32":
         return None
 
     class ProcessMemoryCounters(ctypes.Structure):

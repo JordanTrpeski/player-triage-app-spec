@@ -18,7 +18,7 @@ Author: **Jordan Trpeski** — [trpeski.mk](https://trpeski.mk) · [GitHub](http
 - Pydantic — typed configuration models
 - JSON Schema — policy and output contracts
 - pytest
-- mypy
+- mypy (strict)
 
 ## Architecture highlights
 
@@ -84,7 +84,7 @@ The console only listens on `127.0.0.1`. Once dependencies are installed, nothin
 
 ```bash
 pytest -q                                   # 354 tests across 34 files
-mypy                                        # type checking (disallow_untyped_defs, strict_optional)
+mypy                                        # strict type checking
 python tools/validate_policy_package.py     # policy bundle integrity
 python tools/validate_application_spec.py   # application spec consistency
 ```

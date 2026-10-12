@@ -17,6 +17,7 @@ from player_triage.engine import TriageEngine
 from player_triage.errors import HashIntegrityError
 from player_triage.model.configuration import build_local_classifier, resolve_model_path
 from player_triage.model.providers import DisabledSemanticClassifier, LocalModelSemanticClassifier
+from player_triage.paths import resolve_app_root
 from player_triage.pipeline import ingest
 
 
@@ -32,6 +33,12 @@ def test_model_component_is_versioned_hash_verified_and_portable(app_root: Path)
     assert ":\\" not in serialized
 
 
+def _default_model_path() -> Path:
+    config = load_app_config(resolve_app_root())
+    return resolve_model_path(config.component(MODEL_CONFIGURATION_COMPONENT))
+
+
+@pytest.mark.skipif(not _default_model_path().is_file(), reason="model file not available")
 def test_default_model_reference_resolves_outside_repository(app_root: Path) -> None:
     config = load_app_config(app_root)
     path = resolve_model_path(config.component(MODEL_CONFIGURATION_COMPONENT))

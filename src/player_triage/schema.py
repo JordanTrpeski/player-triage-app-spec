@@ -32,7 +32,7 @@ from .paths import schemas_dir
 class SchemaRegistry:
     """Holds the compiled schema registry and precompiled validators."""
 
-    registry: Registry
+    registry: Registry[Any]
     schemas: Mapping[str, Mapping[str, Any]]
     ids: Mapping[str, str]
 
@@ -66,7 +66,8 @@ def _read_schema_file(path: Path) -> Mapping[str, Any]:
             path=path,
         ) from exc
     try:
-        return json.loads(raw)
+        document: Mapping[str, Any] = json.loads(raw)
+        return document
     except json.JSONDecodeError as exc:
         raise InvalidConfigurationError(
             component=path.name,

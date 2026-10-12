@@ -5,8 +5,8 @@ from __future__ import annotations
 import ctypes
 import json
 import math
-import os
 import statistics
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -281,7 +281,7 @@ def _unsafe_auto_response(decision: Mapping[str, Any]) -> bool:
 def _resident_bytes() -> int | None:
     """Best-effort process RSS without adding a monitoring dependency."""
 
-    if os.name != "nt":
+    if sys.platform != "win32":
         return None
 
     class ProcessMemoryCounters(ctypes.Structure):

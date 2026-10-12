@@ -46,6 +46,7 @@ python_files = ["test_*.py"]
 
 [tool.mypy]
 python_version = "3.12"
+strict = true
 packages = ["player_triage"]
 mypy_path = "src"
 strict_optional = true
