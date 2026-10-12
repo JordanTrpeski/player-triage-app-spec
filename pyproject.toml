@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "Local, provider-independent player-contact triage prototype implementing the frozen Stage 9 policy contract."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = {text = "Proprietary"}
-authors = [{name = "player_triage prototype"}]
+license = {text = "MIT"}
+authors = [{name = "Jordan Trpeski", email = "viralstark@gmail.com"}]
 dependencies = [
   "jsonschema==4.23.0",
   "referencing==0.35.1",
