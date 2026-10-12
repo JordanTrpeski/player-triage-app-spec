@@ -68,7 +68,7 @@ python -m player_triage.cli evaluate --output-dir output --performance  # metric
 python -m player_triage.cli demo                                     # launch the control console
 ```
 
-The raw benchmark input contains player message content and is not included in the repository. Place it at `input/dataset_player_messages.csv` before running `run`.
+The benchmark dataset (40 synthetic messages) is included under `input/`.
 
 The console only listens on `127.0.0.1`. Once dependencies are installed, nothing needs network access.
 
