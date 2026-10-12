@@ -1,110 +1,97 @@
-# Decision Log — Player Contact Triage
+# Decision Log
 
-Active bundle `policy-3.3.1` · runtime `rules_only` · model conclusion
-`model_rejected_no_material_improvement` · Python 3.12 · canonical decision digest
-`a90de550d29de67c053631d5937eff96ccd27be0d1f56e7843d3b4388f70a62b`.
+Key design decisions behind the triage engine, and why they were made. Read this before changing the runtime, the policy model or the safety rules.
 
-## Page 1 — What was built and why
+## 1. Ship a deterministic rules-only runtime
 
-**Problem and scope.** A local, provider-independent prototype that triages
-player-support messages into a fixed taxonomy (8 categories, 4 priorities, 3
-routes, named teams) for the 40 supplied messages and an illustrative ~900/day.
-No autonomous account, payment, KYC, fraud, regulator or self-exclusion actions.
+**Context.** The original plan was to classify with a small local LLM. A provider-independent adapter was built and benchmarked: Qwen2.5-0.5B-Instruct (GGUF, q4_k_m) on CPU via llama-cpp-python.
 
-**Architecture.** Input validation → normalization + repeat-contact linkage →
-sensitive detection/redaction → model-eligibility gate → deterministic terminal
-safety rules → rules-only classification → deterministic final policy + market
-overlays → output-schema + semantic validation (fail closed) → CSV/JSONL/SQLite/
-audit + local console. An optional local LLM sits only at the classification step
-as a *proposer* and is currently disabled.
+**Choice.** The runtime is `rules_only`. The model adapter, eligibility gate and tests stay in the codebase, but the model is disabled and never loaded.
 
-**Rules vs AI vs human.** Deterministic policy is authoritative for eligibility,
-safety, priority, route, team, human-review, auto-response and market overlays. A
-model may only ever propose category/intent/secondary-intents/signals/complaint/
-ambiguity, and cannot lower any safety outcome. Humans perform all operational
-actions (account, payment, KYC, self-exclusion); the system classifies and audits.
+**Trade-off.** On a synthetic holdout the model did not meaningfully improve intent accuracy over the rules. It added about 1.4 s per inference (the rules engine takes about 4 ms per message) plus model-provenance and installation overhead. It could never have been given authority over safety fields anyway. The cost is that rules only cover phrasings someone has written down. New wording requires a policy change, not retraining.
 
-**Sensitive-data and prompt-injection controls.** PAN/CVV/authentication secrets/
-OTP/PIN/recovery codes/identity numbers/player IDs are detected locally and
-redacted before any downstream step; such cases become `bypass_sensitive` and
-never reach a model. Prompt-injection text is treated as untrusted data →
-`bypass_untrusted_input`, `model_called=false`; the injected request cannot change
-category, priority, route or schema.
+## 2. Keep business rules in versioned JSON, not code
 
-**Deterministic high-risk precedence.** Self-harm, explicit self-exclusion
-(incl. German phrasings, with negation/informational/quoted guards), underage,
-active account takeover, exposed payment/authentication data, and redaction
-uncertainty are terminal, locked rules that bypass the model and force specialist
-routing + human review.
+**Context.** Taxonomy, routing, thresholds, market overlays and redaction patterns change more often than the engine does, and those changes need review and rollback.
 
-**Outputs and auditability.** Decisions are written to CSV and JSONL with no raw
-message text, player identifiers or sensitive values. Append-only audit events
-(JSONL + SQLite) record policy version, component digests, triggered rule IDs,
-final decision, fallbacks, overrides and configuration changes. A `run_manifest`
-records a canonical decision digest for reproducibility.
+**Choice.** All policy lives in `policy/` as JSON, validated against `schemas/` and versioned as a single hash-verified bundle. The engine interprets policy and has no message-specific branches.
 
-**Local control console.** A localhost-only Streamlit console (8 pages) provides
-dashboard, messages, human review, Policy Studio (governed draft → validate →
-impact → activate → rollback), evaluation, audit explorer, configuration versions
-and settings. No external ports, tools or model editing through the normal UI.
+**Trade-off.** Adding a new kind of rule may require extending the rule DSL (`policy/rule_dsl.md`) and its schema, which is slower than writing an `if` statement. In return, policy changes can be reviewed, diffed and rolled back without a code release.
 
-**Why the local model was rejected.** Phase 04 built a provider-independent
-adapter and benchmarked a small permissive local model (Qwen2.5-0.5B-Instruct
-GGUF q4_k_m, apache-2.0, CPU via llama-cpp-python; local benchmark load ≈0.7 s,
-≈1.4 s/inference). On the independent synthetic semantic holdout it did not
-**meaningfully** improve intent over rules-only, added latency and a model
-provenance/install burden, and could not be granted authority over any safety
-field. Conclusion: `model_rejected_no_material_improvement`. The adapter, gate,
-governance and tests are retained as evidence; the model stays disabled.
+## 3. Deterministic policy is authoritative; any model is a proposer only
 
-## Page 2 — Evidence, limitations and recommendation
+**Context.** A model might be re-enabled in future, so its authority needed defining in advance.
 
-**Supplied-set results (demonstration-set agreement).** 40/40 schema-valid
-decisions, 0 failed, 9 deterministic/privacy bypasses. Category 40/40; priority,
-route and team 40/40; intent 39/40. Canonical decision digest matches the accepted
-value above.
+**Choice.** Eligibility, safety flags, priority, route, team, the human-review requirement and auto-responses are always decided by deterministic policy. A model may only propose category, intent, secondary intents, signals and ambiguity, and it can never lower a safety outcome.
 
-**Core mismatch and diagnostic differences.** The single core mismatch is **M22
-intent** (`withdrawal_delay` expected vs `withdrawal_status_first_contact`) — a
-short multilingual delay-vs-first-contact distinction; M22 category/priority/route/
-team are correct. Separately there are **52 set-valued diagnostic differences**
-(secondary-intent and risk-flag sets) that affect none of the five scored fields
-and no safety gate.
+**Trade-off.** This caps how much a model could ever improve results. That is intentional: the fields that carry risk stay auditable and reproducible.
 
-**Safety-gate results.** 15/15 official hard gates pass; 26/26 locked activation
-gates pass; activation recommendation `eligible_for_controlled_review`. No-call
-tests prove the model is never invoked for M07/M11/M15/M18/M23 or any
-secret/injection holdout case.
+## 4. Treat high-risk signals as terminal, locked rules
 
-**Holdout results (synthetic).** Holdout-v1 (25 cases, discovered-defect
-regression): category 22/25, intent 21/25, with the three originally-discovered
-defects corrected (0 false positives / 0 false negatives on the recorded
-findings). Holdout-v2 (18 new cases): 18/18 on every scored field; zero
-sensitive-secret false negatives; zero prompt-injection cases on a model-eligible
-path. These are synthetic and do not establish production accuracy.
+**Context.** Some messages must never be misrouted: self-harm, explicit self-exclusion, underage play, active account takeover, exposed payment or authentication data, and cases where redaction is uncertain.
 
-**Performance and capacity (local benchmark).** Rules-only ≈22 messages/second
-(fresh benchmark ≈21.75 msg/s; accepted-state reference 22.37 msg/s;
-per-message ≈4 ms; peak Python allocation ≈2.8 MB). Illustrative 900-message daily
-replay ≈40 s of compute — comfortably within a single machine. Not a
-production-scale load test.
+**Choice.** These match terminal rules that skip all later classification and force specialist routing with human review. They are locked against editing through the normal console. Self-exclusion detection includes German phrasings, with guards for negated, informational and quoted mentions.
 
-**Human-review workload (illustrative, 900/day).** ~360 human, ~315 specialist,
-~225 auto-respond; ~90 critical and ~202 high priority per day — human review and
-staffing dominate cost, not inference.
+**Trade-off.** The rules are conservative and will over-escalate some benign messages. A false positive costs a human a few minutes. A false negative is a compliance incident.
 
-**Production-readiness limitations.** Metrics are demonstration/synthetic only; a
-representative labelled evaluation, privacy/security sign-off, model provenance and
-access/retention controls, reliable queues, monitoring and staffing are required
-before production. Non-English coverage is limited; detection is conservative and
-not complete DLP.
+## 5. Detect and redact sensitive data before any downstream step
 
-**Recommended next steps.** (1) Representative labelled evaluation set and
-threshold tuning under governance; (2) privacy/security review and data-handling
-approval; (3) reliability (queues, retries, monitoring) and access/retention
-controls; (4) operational integration behind human action, never autonomous.
+**Context.** Messages can contain card numbers, CVVs, OTPs, PINs, recovery codes, identity numbers and player IDs.
 
-**Explicitly excluded autonomous actions.** No n8n/integration, email/chat
-delivery, ticket assignment, account/payment actions, hosted APIs, production
-authentication or deployment. This is a demonstration prototype — not production
-proven, regulator approved, guaranteed secure, or fully compliant.
+**Choice.** Detection and redaction run locally, immediately after normalisation. Messages containing such data are marked `bypass_sensitive` and would never be sent to a model.
+
+**Trade-off.** Pattern-based detection is not full data-loss prevention and will miss formats it has no pattern for. It is a first line of defence, not a guarantee.
+
+## 6. Treat prompt-injection attempts as untrusted data
+
+**Context.** Players can paste text that tries to instruct an automated system.
+
+**Choice.** Messages that match prompt-injection patterns are marked `bypass_untrusted_input` and handled by rules alone. The injected text cannot change category, priority, route or output schema.
+
+**Trade-off.** Legitimate messages that happen to match an injection pattern lose any model assistance. With the model disabled this has no practical cost today.
+
+## 7. Fail closed on validation
+
+**Context.** A malformed or contradictory decision is worse than no decision.
+
+**Choice.** Every decision is checked against the output schema and semantic constraints (`policy/semantic_constraints.json`). A decision that fails is not emitted as a normal result; the message is isolated and reported, and the rest of the batch continues.
+
+**Trade-off.** One bad record can't contaminate the batch, but a policy bug shows up as failed records rather than a degraded best guess.
+
+## 8. Keep raw content out of outputs; make the audit trail append-only
+
+**Context.** Outputs and audit logs get shared more widely than the raw input.
+
+**Choice.** The decision CSV and JSONL contain no raw message text, player identifiers or sensitive values. Audit events are append-only (JSONL plus SQLite) and record the policy version, component digests, triggered rule IDs, fallbacks, overrides and configuration changes. Each run writes a manifest with a decision digest so results can be reproduced.
+
+**Trade-off.** Reviewing a decision requires access to the original input. That is acceptable, because access to the input should be restricted anyway.
+
+## 9. Keep consequential actions human-controlled
+
+**Context.** Responsible-gambling, payment, KYC, fraud and account actions carry regulatory consequences.
+
+**Choice.** The system classifies, prioritises, routes and audits, and stops there. Routing to a human or specialist team is a normal outcome, not a failure.
+
+**Trade-off.** Staffing, not compute, dominates operating cost. At an illustrative 900 messages a day, roughly three quarters of messages go to human or specialist queues.
+
+## 10. Govern policy changes through the console, localhost only
+
+**Context.** Operators need to tune rules and thresholds without editing JSON by hand or bypassing review.
+
+**Choice.** The Streamlit console binds to `127.0.0.1`. Its Policy Studio enforces draft → validate → impact preview → activate → rollback. Locked safety rules and model settings cannot be edited there.
+
+**Trade-off.** There is no multi-user authentication or remote access. Both would be required before shared use.
+
+## 11. Keep evaluation datasets separate
+
+**Context.** It is easy to overstate accuracy by mixing tuning data, regression cases and live batches.
+
+**Choice.** The 40-message benchmark, the synthetic holdouts and imported operational batches are reported separately. Unlabelled imports are never presented as accuracy measurements.
+
+**Trade-off.** The reported numbers are narrower and less flattering, but each number means what it says.
+
+## Known limitations
+
+- **Small labelled data.** Benchmark agreement comes from 40 labelled messages plus synthetic holdouts, which is not enough to establish production accuracy. One known mismatch remains: message M22 is classified as `withdrawal_status_first_contact` where the label is `withdrawal_delay`. A representative labelled set is the main prerequisite for further tuning.
+- **Limited non-English coverage.** Only a few languages have phrasings written into the rules.
+- **No production infrastructure.** Queues, retries, monitoring, access control and retention policies are not implemented.
