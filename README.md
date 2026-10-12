@@ -84,6 +84,12 @@ python tools/validate_application_spec.py    # application spec consistency
 
 The suite covers ingestion, normalisation, detection, redaction, the rules engine, the operational pipeline, evaluation governance and the control console.
 
+## Further reading
+
+- [Architecture](docs/ARCHITECTURE.md) — system architecture and design rationale
+- [Decision log](docs/DECISION_LOG.md) — key design decisions and trade-offs
+- [Case study brief](docs/Case_Study__Player_Contact_Triage_Automation.pdf) — original case study brief
+
 ## Prototype status
 
 This is a case-study prototype, not a production service. Benchmark results reflect agreement on a 40-message demonstration set and synthetic holdouts, not guaranteed accuracy. Deploying it in production would require approved integrations, authentication and authorisation, monitoring, operational ownership, privacy and security review, and validation against a larger, representative labelled dataset.
