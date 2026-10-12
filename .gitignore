@@ -9,3 +9,4 @@ build/
 dist/
 *.egg
 output/
+/validation_report.txt
