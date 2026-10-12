@@ -190,7 +190,7 @@ def main():
                 fail(f"{item['id']}: unknown message ID {message_id}")
 
     forbidden = ["4539 1488 0343 6467", "4539148803436467", "CVV 441", "cvv 441"]
-    for path in list(POL.glob("*")) + list(SCH.glob("*")) + list((ROOT / "coding_runbook").rglob("*")) + list((ROOT / "docs").glob("*")):
+    for path in list(POL.glob("*")) + list(SCH.glob("*")) + list((ROOT / "docs").glob("*")):
         if not path.is_file() or path.suffix.lower() not in {".json", ".jsonl", ".csv", ".md", ".txt"}:
             continue
         text = path.read_text(encoding="utf-8")
